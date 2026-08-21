@@ -79,11 +79,28 @@ function countUsers() {
     return getUsers().length;
 }
 
+// ============== CÓDIGOS DE CANJE ==============
+const codesPath = path.join(dbDir, 'codes.json');
+if (!fs.existsSync(codesPath)) fs.writeFileSync(codesPath, '[]', 'utf-8');
+
+function getCodes() {
+    try {
+        return JSON.parse(fs.readFileSync(codesPath, 'utf-8'));
+    } catch {
+        return [];
+    }
+}
+function saveCodes(codes) {
+    fs.writeFileSync(codesPath, JSON.stringify(codes, null, 2), 'utf-8');
+}
+
 module.exports = {
     getUsers,
     findUser,
     createUser,
     updateUserBy,
     registerRequest,
-    countUsers
+    countUsers,
+    getCodes,
+    saveCodes
 };
