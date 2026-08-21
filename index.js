@@ -62,6 +62,11 @@ function authHandler(req, res, next) {
 // Sirve la interfaz web (public/index.html) en la raíz
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Rutas "limpias" para las páginas (sin tener que escribir .html)
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
+app.get('/dash', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dash.html')));
+
 app.get('/api/status', (req, res) => {
     res.json({
         status: true,
