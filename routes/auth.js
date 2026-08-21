@@ -71,9 +71,91 @@ router.get('/me', (req, res) => {
     });
 });
 
+// ============== ACTUALIZAR PERFIL (username / password) ==============
+router.post('/update-profile', async (req, res) => {
+    const { apiKey, username, password } = req.body;
+    if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
+
+    const user = db.findUser('key', apiKey);
+    if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
+
+    const updates = {};
+    if (username && username.trim()) updates.username = username.trim();
+    if (password && password.trim()) updates.password = await bcrypt.hash(password.trim(), 10);
+
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ status: false, message: 'No enviaste ningún cambio' });
+    }
+
+    db.updateUserBy('id', user.id, updates);
+    res.json({ status: true, message: 'Perfil actualizado correctamente' });
+});
+
 // ============== ESTADÍSTICAS GLOBALES (para la portada) ==============
 router.get('/stats', (req, res) => {
     res.json({ status: true, users: db.countUsers(), endpoints: 2 });
+});
+
+// ============== CANJEAR CÓDIGO ==============
+router.post('/redeem', (req, res) => {
+    const { apiKey, code } = req.body;
+    if (!apiKey || !code) {
+        return res.status(400).json({ status: false, message: 'Faltan datos: apiKey, code' });
+    }
+
+    const user = db.findUser('key', apiKey);
+    if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
+
+    const normalized = code.trim().toUpperCase();
+    const codes = db.getCodes();
+    const found = codes.find(c => c.code === normalized);
+
+    if (!found) return res.status(404).json({ status: false, message: 'Código no válido' });
+    if (!found.active) return res.status(400).json({ status: false, message: 'Este código ya no está activo' });
+    if (found.uses >= found.maxUses) return res.status(400).json({ status: false, message: 'Este código ya alcanzó su límite de usos' });
+    if (found.usedBy.includes(user.email)) return res.status(400).json({ status: false, message: 'Ya canjeaste este código antes' });
+
+    const newLimit = (user.limit || 100) + found.requests;
+    db.updateUserBy('id', user.id, { limit: newLimit });
+
+    found.uses += 1;
+    found.usedBy.push(user.email);
+    if (found.uses >= found.maxUses) found.active = false;
+    db.saveCodes(codes);
+
+    res.json({
+        status: true,
+        message: `¡Código canjeado! +${found.requests} solicitudes agregadas`,
+        new_limit: newLimit
+    });
+});
+
+// ============== ADMIN: CREAR CÓDIGO ==============
+router.post('/admin/create-code', (req, res) => {
+    const ADMIN_KEY = process.env.ADMIN_KEY || 'familybot-md';
+    const { adminKey, code, requests, maxUses } = req.body;
+
+    if (adminKey !== ADMIN_KEY) return res.status(403).json({ status: false, message: 'No autorizado' });
+    if (!code || !requests || !maxUses) return res.status(400).json({ status: false, message: 'Faltan datos' });
+
+    const normalized = code.trim().toUpperCase();
+    const codes = db.getCodes();
+    if (codes.find(c => c.code === normalized)) {
+        return res.status(400).json({ status: false, message: 'Ese código ya existe' });
+    }
+
+    codes.push({
+        code: normalized,
+        requests: parseInt(requests),
+        maxUses: parseInt(maxUses),
+        uses: 0,
+        usedBy: [],
+        active: true,
+        createdAt: new Date().toISOString()
+    });
+    db.saveCodes(codes);
+
+    res.json({ status: true, message: 'Código creado', code: normalized });
 });
 
 module.exports = router;
