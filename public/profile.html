@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FamilyBot-MD · Mi Perfil</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    :root {
+        --bg-primary: #0a0b0e;
+        --bg-card: #14161c;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --accent: #ec4899;
+        --accent-purple: #a855f7;
+        --accent-gradient: linear-gradient(135deg, #ec4899, #a855f7);
+        --radius: 20px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; min-height: 100vh; }
+    header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        position: sticky; top: 0; background: var(--bg-primary); z-index: 10;
+    }
+    .brand { font-weight: 800; font-size: 1.1rem; }
+    .brand span { background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .back-btn { background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); padding: 8px 14px; border-radius: 10px; font-size: 0.8rem; cursor: pointer; text-decoration: none; }
+    main { max-width: 480px; margin: 0 auto; padding: 24px 18px 60px; }
+    .card { background: var(--bg-card); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; border: 1px solid rgba(255,255,255,0.05); }
+    .card h3 { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+    label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; margin-top: 14px; }
+    input { width: 100%; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; color: var(--text-primary); font-size: 0.95rem; outline: none; }
+    input:focus { border-color: var(--accent); }
+    input:disabled { opacity: 0.5; }
+    button.save-btn { width: 100%; margin-top: 20px; background: var(--accent-gradient); border: none; border-radius: 12px; padding: 13px; color: #fff; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+    .msg { margin-top: 12px; font-size: 0.85rem; text-align: center; min-height: 18px; }
+    .msg.error { color: #ef4444; }
+    .msg.success { color: #22c55e; }
+</style>
+</head>
+<body>
+    <header>
+        <div class="brand"><span>FamilyBot-MD</span></div>
+        <a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a>
+    </header>
+
+    <main>
+        <div class="card">
+            <h3>Información de la cuenta</h3>
+            <label>Correo (no editable)</label>
+            <input type="email" id="emailField" disabled>
+
+            <label>Usuario</label>
+            <input type="text" id="usernameField" placeholder="Tu nombre de usuario">
+
+            <label>Nueva contraseña (opcional)</label>
+            <input type="password" id="passwordField" placeholder="Dejar vacío para no cambiarla">
+
+            <button class="save-btn" id="saveBtn">Guardar cambios</button>
+            <div class="msg" id="msg"></div>
+        </div>
+    </main>
+
+    <script>
+        const apiKey = localStorage.getItem('familybot_key');
+        if (!apiKey) window.location.href = '/login';
+
+        async function loadProfile() {
+            try {
+                const res = await fetch(`/api/auth/me?apiKey=${encodeURIComponent(apiKey)}`);
+                const data = await res.json();
+                if (data.status) {
+                    document.getElementById('emailField').value = data.data.email;
+                    document.getElementById('usernameField').value = data.data.username;
+                    localStorage.setItem('familybot_username', data.data.username);
+                }
+            } catch (err) { console.error(err); }
+        }
+        loadProfile();
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const username = document.getElementById('usernameField').value.trim();
+            const password = document.getElementById('passwordField').value.trim();
+            const msgDiv = document.getElementById('msg');
+
+            msgDiv.className = 'msg';
+            msgDiv.innerText = 'Guardando...';
+
+            try {
+                const res = await fetch('/api/auth/update-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey, username, password })
+                });
+                const data = await res.json();
+                if (data.status) {
+                    msgDiv.className = 'msg success';
+                    msgDiv.innerText = data.message;
+                    localStorage.setItem('familybot_username', username);
+                    document.getElementById('passwordField').value = '';
+                } else {
+                    msgDiv.className = 'msg error';
+                    msgDiv.innerText = data.message;
+                }
+            } catch (err) {
+                msgDiv.className = 'msg error';
+                msgDiv.innerText = 'Error de conexión';
+            }
+        });
+    </script>
+</body>
+</html>
