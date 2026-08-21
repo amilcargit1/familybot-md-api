@@ -188,6 +188,17 @@
             <div class="endpoint-result" id="qrResult"></div>
         </div>
 
+        <!-- Descargar TikTok -->
+        <div class="endpoint-card">
+            <div class="endpoint-title"><i class="fab fa-tiktok"></i> Descargar video de TikTok</div>
+            <div class="endpoint-desc">GET /api/download/tiktok — descarga sin marca de agua a partir del link</div>
+            <div class="endpoint-form">
+                <input type="text" id="ttUrl" placeholder="Pega el link del video de TikTok...">
+                <button id="ttBtn">Descargar</button>
+            </div>
+            <div class="endpoint-result" id="ttResult"></div>
+        </div>
+
         <!-- Estado del servicio -->
         <div class="endpoint-card">
             <div class="endpoint-title"><i class="fas fa-heart-pulse"></i> Estado del servicio</div>
@@ -200,7 +211,7 @@
 
         <!-- Próximamente -->
         <div class="endpoint-card" style="opacity:0.6">
-            <div class="endpoint-title"><i class="fas fa-download"></i> Descargas (TikTok, YouTube...) <span class="badge-soon">Próximamente</span></div>
+            <div class="endpoint-title"><i class="fas fa-download"></i> Más descargas (YouTube, Instagram...) <span class="badge-soon">Próximamente</span></div>
             <div class="endpoint-desc">Iremos agregando más endpoints a este dashboard paso a paso.</div>
         </div>
     </main>
@@ -242,6 +253,32 @@
                 const data = await res.json();
                 if (data.status) {
                     resultDiv.innerHTML = `<img src="${data.result}" alt="QR generado">`;
+                } else {
+                    resultDiv.innerHTML = `<pre>${data.message}</pre>`;
+                }
+            } catch (err) {
+                resultDiv.innerHTML = '<pre>Error de conexión</pre>';
+            }
+        });
+
+        // ---- Endpoint: Descargar TikTok ----
+        document.getElementById('ttBtn').addEventListener('click', async () => {
+            const url = document.getElementById('ttUrl').value.trim();
+            const resultDiv = document.getElementById('ttResult');
+            if (!url) { resultDiv.innerHTML = '<pre>Pega un link primero</pre>'; return; }
+
+            resultDiv.innerHTML = '<pre>Procesando video...</pre>';
+            try {
+                const res = await fetch(`/api/download/tiktok?apiKey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}`);
+                const data = await res.json();
+                if (data.status) {
+                    const d = data.data;
+                    resultDiv.innerHTML = `
+                        <pre>${d.title || 'Sin título'}
+Autor: ${d.author?.nickname || ''} (${d.author?.username || ''})
+▶ ${d.stats?.plays || 0} reproducciones · ❤ ${d.stats?.likes || 0}</pre>
+                        <a href="${d.media.no_watermark}" target="_blank" style="color:#ec4899;font-weight:600;font-size:0.85rem;display:block;margin-top:8px">⬇ Descargar sin marca de agua</a>
+                    `;
                 } else {
                     resultDiv.innerHTML = `<pre>${data.message}</pre>`;
                 }
