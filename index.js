@@ -59,15 +59,8 @@ function authHandler(req, res, next) {
 
 // ============== RUTAS PÚBLICAS ==============
 
-// Salud del servicio (Render la usa para saber si el servicio está vivo)
-app.get('/', (req, res) => {
-    res.json({
-        status: true,
-        service: 'FamilyBot-MD API',
-        creator: 'AmilcarGit',
-        message: 'La API está funcionando correctamente 🚀'
-    });
-});
+// Sirve la interfaz web (public/index.html) en la raíz
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/status', (req, res) => {
     res.json({
@@ -78,6 +71,11 @@ app.get('/api/status', (req, res) => {
         node_version: process.version,
         timestamp: new Date().toISOString()
     });
+});
+
+// Estadísticas usadas por la interfaz web (public/index.html)
+app.get('/api/auth/stats', (req, res) => {
+    res.json({ status: true, users: getUsers().length, endpoints: 4 });
 });
 
 // Registro de usuario -> devuelve una API key
@@ -148,9 +146,13 @@ app.get('/api/tools/qr', authHandler, async (req, res) => {
     }
 });
 
-// ============== 404 ==============
+// ============== 404 (páginas / rutas no encontradas) ==============
 app.use((req, res) => {
-    res.status(404).json({ status: false, message: 'Ruta no encontrada' });
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ status: false, message: 'Ruta no encontrada' });
+    }
+    // Página aún no creada (ej: /login, /register, /dash) — la iremos agregando paso a paso
+    res.status(404).send('<h1 style="font-family:sans-serif;color:#fff;background:#0a0b0e;padding:40px">Esta página todavía no existe — la agregaremos en el siguiente paso. <a href="/" style="color:#ec4899">Volver al inicio</a></h1>');
 });
 
 app.listen(PORT, () => {
