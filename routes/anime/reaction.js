@@ -3,36 +3,48 @@ const router = express.Router();
 
 /*
  * ╔══════════════════════════════════════════════╗
- * ║          FamilyBot-MD Anime API             ║
- * ║              Anime Reactions                ║
+ * ║              FamilyBot-MD API               ║
+ * ║               Anime Reactions               ║
  * ╚══════════════════════════════════════════════╝
  *
  * Endpoint:
  *
  * GET /api/anime/reaction?apiKey=TU_API_KEY&type=hug
  *
- * Proveedor principal:
- * https://nekos.best/api/v2
+ * Proxy:
  *
- * Fallback:
- * https://api.waifu.pics/sfw
+ * GET /api/anime/reaction/image?apiKey=TU_API_KEY&type=hug
+ *
+ * El bot descarga la imagen desde nuestro propio servidor.
  */
 
 // ======================================================
 // CONFIGURACIÓN
 // ======================================================
 
-const NEKOSBEST_API = 'https://nekos.best/api/v2';
-const WAIFU_API = 'https://api.waifu.pics/sfw';
+const NEKOSBEST_API =
+    'https://nekos.best/api/v2';
+
+const WAIFU_API =
+    'https://api.waifu.pics/sfw';
 
 const TIMEOUT_MS = 10000;
+
 const MAX_RETRIES = 2;
 
 // ======================================================
-// 59 REACCIONES DE NEKOSBEST
+// USER AGENT
+// ======================================================
+
+const USER_AGENT =
+    'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)';
+
+// ======================================================
+// REACCIONES NEKOSBEST
 // ======================================================
 
 const ALLOWED = new Set([
+
     'angry',
     'baka',
     'bite',
@@ -95,15 +107,11 @@ const ALLOWED = new Set([
 ]);
 
 // ======================================================
-// REACCIONES COMPATIBLES CON WAIFU.PICS
+// FALLBACK WAIFU.PICS
 // ======================================================
-//
-// Waifu.pics no tiene todas las categorías de NekosBest.
-// Por eso solamente usamos fallback cuando existe
-// una categoría equivalente.
-//
 
 const WAIFU_FALLBACK = {
+
     bite: 'bite',
     blush: 'blush',
     bored: 'bored',
@@ -134,42 +142,80 @@ const WAIFU_FALLBACK = {
 // ======================================================
 
 function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+
+    return new Promise(resolve =>
+        setTimeout(resolve, ms)
+    );
 }
 
 // ======================================================
-// FETCH CON TIMEOUT
+// VALIDAR URL
 // ======================================================
 
-async function fetchJson(url, options = {}) {
+function isValidUrl(url) {
 
-    const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-        controller.abort();
-    }, TIMEOUT_MS);
+    if (
+        typeof url !== 'string'
+    ) {
+        return false;
+    }
 
     try {
 
-        const response = await fetch(url, {
-            method: 'GET',
+        const parsed =
+            new URL(url);
 
-            headers: {
-                'Accept': 'application/json',
+        return (
+            parsed.protocol === 'http:' ||
+            parsed.protocol === 'https:'
+        );
 
-                // NekosBest exige un User-Agent identificable.
-                'User-Agent':
-                    'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)',
+    } catch {
 
-                ...options.headers
-            },
+        return false;
+    }
+}
 
-            signal: controller.signal
-        });
+// ======================================================
+// FETCH JSON
+// ======================================================
 
-        // ==================================================
-        // ERROR HTTP
-        // ==================================================
+async function fetchJson(
+    url,
+    options = {}
+) {
+
+    const controller =
+        new AbortController();
+
+    const timeout =
+        setTimeout(() => {
+
+            controller.abort();
+
+        }, TIMEOUT_MS);
+
+    try {
+
+        const response =
+            await fetch(url, {
+
+                method: 'GET',
+
+                headers: {
+
+                    'Accept':
+                        'application/json',
+
+                    'User-Agent':
+                        USER_AGENT,
+
+                    ...options.headers
+                },
+
+                signal:
+                    controller.signal
+            });
 
         if (!response.ok) {
 
@@ -178,15 +224,15 @@ async function fetchJson(url, options = {}) {
             );
         }
 
-        // ==================================================
-        // VALIDAR CONTENT-TYPE
-        // ==================================================
-
         const contentType =
-            response.headers.get('content-type') || '';
+            response.headers.get(
+                'content-type'
+            ) || '';
 
         if (
-            !contentType.toLowerCase().includes('application/json')
+            !contentType
+                .toLowerCase()
+                .includes('application/json')
         ) {
 
             throw new Error(
@@ -203,7 +249,103 @@ async function fetchJson(url, options = {}) {
 }
 
 // ======================================================
-// OBTENER DE NEKOSBEST
+// FETCH IMAGEN
+// ======================================================
+
+async function fetchImage(url) {
+
+    const controller =
+        new AbortController();
+
+    const timeout =
+        setTimeout(() => {
+
+            controller.abort();
+
+        }, TIMEOUT_MS);
+
+    try {
+
+        const response =
+            await fetch(url, {
+
+                method: 'GET',
+
+                headers: {
+
+                    /*
+                     * IMPORTANTE:
+                     * Estos headers se envían cuando
+                     * nuestra API descarga la imagen.
+                     */
+
+                    'User-Agent':
+                        USER_AGENT,
+
+                    'Accept':
+                        'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+
+                    'Referer':
+                        'https://nekos.best/'
+                },
+
+                signal:
+                    controller.signal
+            });
+
+        if (!response.ok) {
+
+            throw new Error(
+                `HTTP ${response.status}`
+            );
+        }
+
+        const contentType =
+            response.headers.get(
+                'content-type'
+            ) || '';
+
+        if (
+            !contentType
+                .toLowerCase()
+                .startsWith('image/')
+        ) {
+
+            throw new Error(
+                `Contenido no válido: ${contentType}`
+            );
+        }
+
+        const buffer =
+            Buffer.from(
+                await response.arrayBuffer()
+            );
+
+        if (
+            !buffer ||
+            buffer.length === 0
+        ) {
+
+            throw new Error(
+                'La imagen está vacía'
+            );
+        }
+
+        return {
+
+            buffer,
+
+            contentType
+        };
+
+    } finally {
+
+        clearTimeout(timeout);
+    }
+}
+
+// ======================================================
+// NEKOSBEST
 // ======================================================
 
 async function getFromNekosBest(type) {
@@ -224,13 +366,11 @@ async function getFromNekosBest(type) {
             const data =
                 await fetchJson(url);
 
-            // ==================================================
-            // VALIDAR ESTRUCTURA
-            // ==================================================
-
             if (
                 !data ||
-                !Array.isArray(data.results) ||
+                !Array.isArray(
+                    data.results
+                ) ||
                 data.results.length === 0
             ) {
 
@@ -239,11 +379,12 @@ async function getFromNekosBest(type) {
                 );
             }
 
-            const result = data.results[0];
+            const result =
+                data.results[0];
 
             if (
                 !result ||
-                typeof result.url !== 'string'
+                !isValidUrl(result.url)
             ) {
 
                 throw new Error(
@@ -251,44 +392,45 @@ async function getFromNekosBest(type) {
                 );
             }
 
-            if (
-                !result.url.startsWith('http://') &&
-                !result.url.startsWith('https://')
-            ) {
-
-                throw new Error(
-                    'La URL recibida no es válida'
-                );
-            }
-
             return {
+
                 success: true,
-                provider: 'nekos.best',
+
+                provider:
+                    'nekos.best',
+
                 result
             };
 
         } catch (error) {
 
-            lastError = error;
+            lastError =
+                error;
 
             console.error(
-                `[NEKOSBEST] ${type} | intento ${attempt}/${MAX_RETRIES}:`,
-                error.message
+                `[NEKOSBEST] ${type} | intento ${attempt}/${MAX_RETRIES}: ${error.message}`
             );
 
-            if (attempt < MAX_RETRIES) {
+            if (
+                attempt <
+                MAX_RETRIES
+            ) {
+
                 await sleep(500);
             }
         }
     }
 
-    throw lastError || new Error(
-        'NekosBest no disponible'
+    throw (
+        lastError ||
+        new Error(
+            'NekosBest no disponible'
+        )
     );
 }
 
 // ======================================================
-// FALLBACK WAIFU.PICS
+// WAIFU.PICS
 // ======================================================
 
 async function getFromWaifu(type) {
@@ -296,7 +438,6 @@ async function getFromWaifu(type) {
     const fallbackType =
         WAIFU_FALLBACK[type];
 
-    // No existe equivalente
     if (!fallbackType) {
 
         throw new Error(
@@ -312,50 +453,111 @@ async function getFromWaifu(type) {
 
     if (
         !data ||
-        typeof data.url !== 'string'
+        !isValidUrl(data.url)
     ) {
 
         throw new Error(
-            'Waifu.pics devolvió una respuesta inválida'
-        );
-    }
-
-    if (
-        !data.url.startsWith('http://') &&
-        !data.url.startsWith('https://')
-    ) {
-
-        throw new Error(
-            'La URL del fallback no es válida'
+            'Waifu.pics devolvió una URL inválida'
         );
     }
 
     return {
+
         success: true,
-        provider: 'waifu.pics',
+
+        provider:
+            'waifu.pics',
+
         result: {
-            url: data.url
+
+            url:
+                data.url
         }
     };
 }
 
 // ======================================================
+// OBTENER REACCIÓN
+// ======================================================
+
+async function getReaction(type) {
+
+    /*
+     * PRIMER PROVEEDOR
+     */
+
+    try {
+
+        const response =
+            await getFromNekosBest(
+                type
+            );
+
+        return {
+
+            ...response,
+
+            fallback:
+                false
+        };
+
+    } catch (nekosError) {
+
+        console.error(
+            `[ANIME] NekosBest falló para ${type}: ${nekosError.message}`
+        );
+    }
+
+    /*
+     * FALLBACK
+     */
+
+    try {
+
+        const response =
+            await getFromWaifu(
+                type
+            );
+
+        return {
+
+            ...response,
+
+            fallback:
+                true
+        };
+
+    } catch (fallbackError) {
+
+        console.error(
+            `[ANIME] Waifu.pics falló para ${type}: ${fallbackError.message}`
+        );
+
+        throw new Error(
+            'Todos los proveedores fallaron'
+        );
+    }
+}
+
+// ======================================================
 // GET /api/anime/reaction
 // ======================================================
+//
+// Devuelve JSON.
+// La URL devuelta apunta a nuestro PROXY.
+//
 
 router.get('/', async (req, res) => {
 
-    // ==================================================
-    // OBTENER TYPE
-    // ==================================================
-
     const type =
-        String(req.query.type || '')
+        String(
+            req.query.type || ''
+        )
             .trim()
             .toLowerCase();
 
     // ==================================================
-    // TYPE FALTANTE
+    // VALIDAR TYPE
     // ==================================================
 
     if (!type) {
@@ -364,7 +566,8 @@ router.get('/', async (req, res) => {
 
             status: false,
 
-            creator: 'familybot-md',
+            creator:
+                'familybot-md',
 
             message:
                 'Debes especificar una reacción',
@@ -377,17 +580,16 @@ router.get('/', async (req, res) => {
         });
     }
 
-    // ==================================================
-    // TYPE INVÁLIDO
-    // ==================================================
-
-    if (!ALLOWED.has(type)) {
+    if (
+        !ALLOWED.has(type)
+    ) {
 
         return res.status(400).json({
 
             status: false,
 
-            creator: 'familybot-md',
+            creator:
+                'familybot-md',
 
             message:
                 `La reacción "${type}" no existe`,
@@ -397,130 +599,232 @@ router.get('/', async (req, res) => {
         });
     }
 
-    // ==================================================
-    // NEKOSBEST
-    // ==================================================
-
     try {
 
         const response =
-            await getFromNekosBest(type);
+            await getReaction(type);
 
         const result =
             response.result;
 
+        /*
+         * Creamos una URL de nuestro propio servidor.
+         *
+         * El bot descargará desde:
+         *
+         * familybot-md-api.onrender.com
+         *
+         * y NO directamente desde NekosBest.
+         */
+
+        const host =
+            `${req.protocol}://${req.get('host')}`;
+
+        const apiKey =
+            typeof req.query.apiKey === 'string'
+                ? req.query.apiKey
+                : '';
+
+        const proxyUrl =
+            `${host}/api/anime/reaction/image?apiKey=${encodeURIComponent(apiKey)}&type=${encodeURIComponent(type)}`;
+
         return res.status(200).json({
 
-            status: true,
+            status:
+                true,
 
-            creator: 'familybot-md',
+            creator:
+                'familybot-md',
 
-            type,
+            type:
+                type,
 
-            url: result.url,
+            /*
+             * IMPORTANTE:
+             * El bot utilizará esta URL.
+             */
+
+            url:
+                proxyUrl,
+
+            /*
+             * URL original disponible
+             * solamente como información.
+             */
+
+            original_url:
+                result.url,
 
             provider:
                 response.provider,
 
-            fallback: false,
+            fallback:
+                response.fallback,
 
             anime:
-                result.anime_name || null,
+                result.anime_name ||
+                null,
 
             artist:
-                result.artist_name || null,
+                result.artist_name ||
+                null,
 
             source:
-                result.source_url || null,
+                result.source_url ||
+                null,
 
             dimensions:
-                result.dimensions || null
+                result.dimensions ||
+                null
         });
 
-    } catch (nekosError) {
+    } catch (error) {
 
-        console.error(
-            `[ANIME] NekosBest falló para "${type}":`,
-            nekosError.message
-        );
+        return res.status(502).json({
 
-        // ==================================================
-        // FALLBACK
-        // ==================================================
+            status:
+                false,
 
-        try {
+            creator:
+                'familybot-md',
 
-            const fallback =
-                await getFromWaifu(type);
-
-            return res.status(200).json({
-
-                status: true,
-
-                creator: 'familybot-md',
-
+            type:
                 type,
 
-                url:
-                    fallback.result.url,
+            message:
+                'No se pudo obtener la reacción anime en este momento',
 
-                provider:
-                    fallback.provider,
+            provider:
+                'nekos.best',
 
-                fallback: true,
-
-                message:
-                    'Se utilizó el proveedor de respaldo'
-            });
-
-        } catch (fallbackError) {
-
-            console.error(
-                `[ANIME] Fallback falló para "${type}":`,
-                fallbackError.message
-            );
-
-            // ==================================================
-            // TODOS LOS PROVEEDORES FALLARON
-            // ==================================================
-
-            return res.status(502).json({
-
-                status: false,
-
-                creator: 'familybot-md',
-
-                type,
-
-                message:
-                    'No se pudo obtener la reacción anime en este momento',
-
-                providers: {
-                    primary: 'nekos.best',
-                    fallback: 'waifu.pics'
-                },
-
-                /*
-                 * No mostramos errores internos en producción.
-                 */
-                ...(process.env.NODE_ENV !== 'production'
-                    ? {
-                        debug: {
-                            nekosbest:
-                                nekosError.message,
-
-                            fallback:
-                                fallbackError.message
-                        }
-                    }
-                    : {})
-            });
-        }
+            fallback:
+                'waifu.pics'
+        });
     }
 });
 
 // ======================================================
-// EXPORTAR ROUTER
+// GET /api/anime/reaction/image
+// ======================================================
+//
+// ESTE ES EL PROXY.
+//
+// El bot solicita esta URL.
+//
+// La API:
+// 1. Consulta NekosBest.
+// 2. Si falla usa Waifu.pics.
+// 3. Descarga la imagen.
+// 4. La envía directamente al bot.
+//
+// El bot nunca toca directamente NekosBest.
+//
+
+router.get('/image', async (req, res) => {
+
+    const type =
+        String(
+            req.query.type || ''
+        )
+            .trim()
+            .toLowerCase();
+
+    // ==================================================
+    // VALIDAR TYPE
+    // ==================================================
+
+    if (!type) {
+
+        return res.status(400).send(
+            'Falta el tipo de reacción'
+        );
+    }
+
+    if (
+        !ALLOWED.has(type)
+    ) {
+
+        return res.status(400).send(
+            'Tipo de reacción inválido'
+        );
+    }
+
+    try {
+
+        /*
+         * Obtener reacción.
+         */
+
+        const response =
+            await getReaction(type);
+
+        const imageUrl =
+            response.result.url;
+
+        /*
+         * Descargar imagen desde el servidor
+         * de la API.
+         */
+
+        const image =
+            await fetchImage(
+                imageUrl
+            );
+
+        /*
+         * Headers importantes para WhatsApp.
+         */
+
+        res.setHeader(
+            'Content-Type',
+            image.contentType
+        );
+
+        res.setHeader(
+            'Content-Length',
+            image.buffer.length
+        );
+
+        res.setHeader(
+            'Cache-Control',
+            'public, max-age=300'
+        );
+
+        res.setHeader(
+            'X-FamilyBot-Provider',
+            response.provider
+        );
+
+        res.setHeader(
+            'X-FamilyBot-Fallback',
+            String(
+                response.fallback
+            )
+        );
+
+        /*
+         * Enviar imagen.
+         */
+
+        return res
+            .status(200)
+            .send(image.buffer);
+
+    } catch (error) {
+
+        console.error(
+            `[PROXY] Error descargando ${type}:`,
+            error.message
+        );
+
+        return res.status(502).send(
+            'No se pudo descargar la imagen'
+        );
+    }
+});
+
+// ======================================================
+// EXPORTAR
 // ======================================================
 
 module.exports = router;
