@@ -35,4 +35,17 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.meta = {
+    title: 'Traductor de texto',
+    description: 'Traduce cualquier texto al idioma que quieras (código ISO)',
+    icon: 'fas fa-language',
+    fields: [
+        { name: 'text', label: 'Texto', placeholder: 'Texto a traducir...' },
+        { name: 'to', label: 'Idioma destino', placeholder: 'es, en, ja...', default: 'es' }
+    ],
+    resultType: 'text',
+    resultField: 'data.translated',
+    previewFields: [{ label: 'Detectado', field: 'data.from' }]
+};
+
 module.exports = router;
