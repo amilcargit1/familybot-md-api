@@ -2,22 +2,21 @@ const express = require('express');
 const router = express.Router();
 
 /*
- * ╔══════════════════════════════════════════════════╗
- * ║                 FamilyBot-MD API                ║
- * ║                    Anime Gacha                  ║
- * ╚══════════════════════════════════════════════════╝
- *
- * Endpoint:
+ * ╔══════════════════════════════════════════════╗
+ * ║              FamilyBot-MD API               ║
+ * ║                 Anime Gacha                 ║
+ * ╚══════════════════════════════════════════════╝
  *
  * GET /api/anime/gacha?apiKey=TU_API_KEY
  *
- * Sistema:
- *
- * 1. Elige una categoría aleatoria.
- * 2. Genera una rareza.
- * 3. Consulta NekosBest.
- * 4. Si falla, prueba otra categoría.
- * 5. Si todo falla, devuelve 502.
+ * Características:
+ * - Categorías aleatorias
+ * - Rarezas
+ * - Timeout
+ * - Reintentos
+ * - Fallback entre categorías
+ * - Validación de respuestas
+ * - Compatible con el dashboard actual
  */
 
 // ======================================================
@@ -26,6 +25,11 @@ const router = express.Router();
 
 const TIMEOUT_MS = 8000;
 const MAX_ATTEMPTS = 3;
+
+const NEKOSBEST_API = 'https://nekos.best/api/v2';
+
+const USER_AGENT =
+    'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)';
 
 // ======================================================
 // CATEGORÍAS
@@ -41,14 +45,6 @@ const CATEGORIES = [
 // ======================================================
 // RAREZAS
 // ======================================================
-//
-// Probabilidades aproximadas:
-//
-// Common     55%
-// Rare       30%
-// Epic       12%
-// Legendary   3%
-//
 
 const RARITIES = [
     {
@@ -56,19 +52,16 @@ const RARITIES = [
         emoji: '⚪',
         chance: 55
     },
-
     {
         name: 'Rare',
         emoji: '🔵',
         chance: 30
     },
-
     {
         name: 'Epic',
         emoji: '🟣',
         chance: 12
     },
-
     {
         name: 'Legendary',
         emoji: '🟡',
@@ -77,48 +70,25 @@ const RARITIES = [
 ];
 
 // ======================================================
-// PROVEEDOR
-// ======================================================
-
-const NEKOSBEST_API =
-    'https://nekos.best/api/v2';
-
-// ======================================================
-// USER AGENT
-// ======================================================
-//
-// NekosBest requiere un User-Agent identificable.
-//
-
-const USER_AGENT =
-    'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)';
-
-// ======================================================
-// SLEEP
+// ESPERA
 // ======================================================
 
 function sleep(ms) {
-
-    return new Promise(
-        resolve => setTimeout(resolve, ms)
-    );
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ======================================================
-// ELECCIÓN ALEATORIA
+// ALEATORIO
 // ======================================================
 
 function randomItem(array) {
-
     return array[
-        Math.floor(
-            Math.random() * array.length
-        )
+        Math.floor(Math.random() * array.length)
     ];
 }
 
 // ======================================================
-// GENERAR ID DE TIRADA
+// ID DEL GACHA
 // ======================================================
 
 function generateGachaId() {
@@ -133,26 +103,20 @@ function generateGachaId() {
 }
 
 // ======================================================
-// GENERAR RAREZA
+// RAREZA
 // ======================================================
 
 function generateRarity() {
 
-    const random =
-        Math.random() * 100;
+    const random = Math.random() * 100;
 
     let accumulated = 0;
 
     for (const rarity of RARITIES) {
 
-        accumulated +=
-            rarity.chance;
+        accumulated += rarity.chance;
 
-        if (
-            random <=
-            accumulated
-        ) {
-
+        if (random <= accumulated) {
             return rarity;
         }
     }
@@ -161,47 +125,35 @@ function generateRarity() {
 }
 
 // ======================================================
-// FETCH CON TIMEOUT
+// FETCH JSON CON TIMEOUT
 // ======================================================
 
 async function fetchJson(url) {
 
-    const controller =
-        new AbortController();
+    const controller = new AbortController();
 
-    const timeout =
-        setTimeout(() => {
-
-            controller.abort();
-
-        }, TIMEOUT_MS);
+    const timeout = setTimeout(() => {
+        controller.abort();
+    }, TIMEOUT_MS);
 
     try {
 
-        const response =
-            await fetch(url, {
+        const response = await fetch(url, {
 
-                method: 'GET',
+            method: 'GET',
 
-                headers: {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': USER_AGENT,
+                'Cache-Control': 'no-cache'
+            },
 
-                    'Accept':
-                        'application/json',
+            signal: controller.signal
+        });
 
-                    'User-Agent':
-                        USER_AGENT,
-
-                    'Cache-Control':
-                        'no-cache'
-                },
-
-                signal:
-                    controller.signal
-            });
-
-        // ==================================================
-        // VALIDAR HTTP
-        // ==================================================
+        // --------------------------------------------------
+        // HTTP
+        // --------------------------------------------------
 
         if (!response.ok) {
 
@@ -210,14 +162,12 @@ async function fetchJson(url) {
             );
         }
 
-        // ==================================================
-        // VALIDAR JSON
-        // ==================================================
+        // --------------------------------------------------
+        // CONTENT TYPE
+        // --------------------------------------------------
 
         const contentType =
-            response.headers.get(
-                'content-type'
-            ) || '';
+            response.headers.get('content-type') || '';
 
         if (
             !contentType
@@ -244,17 +194,13 @@ async function fetchJson(url) {
 
 function isValidUrl(url) {
 
-    if (
-        typeof url !== 'string'
-    ) {
-
+    if (typeof url !== 'string') {
         return false;
     }
 
     try {
 
-        const parsed =
-            new URL(url);
+        const parsed = new URL(url);
 
         return (
             parsed.protocol === 'https:' ||
@@ -268,7 +214,7 @@ function isValidUrl(url) {
 }
 
 // ======================================================
-// OBTENER IMAGEN DE NEKOSBEST
+// OBTENER DE NEKOSBEST
 // ======================================================
 
 async function getFromNekosBest(category) {
@@ -279,15 +225,13 @@ async function getFromNekosBest(category) {
     const data =
         await fetchJson(url);
 
-    // ==================================================
+    // --------------------------------------------------
     // VALIDAR RESULTS
-    // ==================================================
+    // --------------------------------------------------
 
     if (
         !data ||
-        !Array.isArray(
-            data.results
-        ) ||
+        !Array.isArray(data.results) ||
         data.results.length === 0
     ) {
 
@@ -296,12 +240,11 @@ async function getFromNekosBest(category) {
         );
     }
 
-    const result =
-        data.results[0];
+    const result = data.results[0];
 
-    // ==================================================
+    // --------------------------------------------------
     // VALIDAR RESULTADO
-    // ==================================================
+    // --------------------------------------------------
 
     if (!result) {
 
@@ -310,60 +253,46 @@ async function getFromNekosBest(category) {
         );
     }
 
-    // ==================================================
+    // --------------------------------------------------
     // VALIDAR URL
-    // ==================================================
+    // --------------------------------------------------
 
-    if (
-        !isValidUrl(
-            result.url
-        )
-    ) {
+    if (!isValidUrl(result.url)) {
 
         throw new Error(
             'La URL recibida no es válida'
         );
     }
 
-    // ==================================================
+    // --------------------------------------------------
     // DEVOLVER DATOS
-    // ==================================================
+    // --------------------------------------------------
 
     return {
 
-        url:
-            result.url,
+        url: result.url,
 
         artist:
-            result.artist_name ||
-            null,
+            result.artist_name || null,
 
         artist_url:
-            result.artist_href ||
-            null,
+            result.artist_href || null,
 
         source:
-            result.source_url ||
-            null,
+            result.source_url || null,
 
         dimensions:
-            result.dimensions ||
-            null
+            result.dimensions || null
     };
 }
 
 // ======================================================
 // CREAR ORDEN DE CATEGORÍAS
 // ======================================================
-//
-// La primera categoría es aleatoria.
-// Las siguientes sirven como fallback.
-//
 
 function createCategoryOrder() {
 
-    const shuffled =
-        [...CATEGORIES];
+    const shuffled = [...CATEGORIES];
 
     for (
         let i = shuffled.length - 1;
@@ -373,8 +302,7 @@ function createCategoryOrder() {
 
         const j =
             Math.floor(
-                Math.random() *
-                (i + 1)
+                Math.random() * (i + 1)
             );
 
         [
@@ -406,16 +334,19 @@ router.get('/', async (req, res) => {
 
     const errors = [];
 
+    const maxAttempts =
+        Math.min(
+            MAX_ATTEMPTS,
+            categoryOrder.length
+        );
+
     // ==================================================
-    // INTENTOS
+    // CASCADA
     // ==================================================
 
     for (
         let i = 0;
-        i < Math.min(
-            MAX_ATTEMPTS,
-            categoryOrder.length
-        );
+        i < maxAttempts;
         i++
     ) {
 
@@ -438,8 +369,16 @@ router.get('/', async (req, res) => {
             // ==================================================
 
             console.log(
-                `[GACHA] ${gachaId} → éxito con ${category}`
+                `[GACHA] ${gachaId} → ${category} OK`
             );
+
+            /*
+             * IMPORTANTE:
+             *
+             * category y url están directamente
+             * en el JSON para mantener compatibilidad
+             * con el dashboard actual.
+             */
 
             return res.status(200).json({
 
@@ -448,41 +387,51 @@ router.get('/', async (req, res) => {
                 creator:
                     'familybot-md',
 
-                gacha: {
+                // ==============================================
+                // CAMPOS PRINCIPALES DEL DASHBOARD
+                // ==============================================
 
-                    id:
-                        gachaId,
+                category:
+                    category,
 
-                    category:
-                        category,
+                url:
+                    result.url,
 
-                    rarity:
-                        rarity.name,
+                // ==============================================
+                // GACHA
+                // ==============================================
 
-                    rarityEmoji:
-                        rarity.emoji,
+                gachaId:
+                    gachaId,
 
-                    rarityChance:
-                        `${rarity.chance}%`
-                },
+                rarity:
+                    rarity.name,
 
-                result: {
+                rarityEmoji:
+                    rarity.emoji,
 
-                    url:
-                        result.url,
+                rarityChance:
+                    `${rarity.chance}%`,
 
-                    artist:
-                        result.artist,
+                // ==============================================
+                // INFORMACIÓN DE LA IMAGEN
+                // ==============================================
 
-                    artist_url:
-                        result.artist_url,
+                artist:
+                    result.artist,
 
-                    source:
-                        result.source,
+                artist_url:
+                    result.artist_url,
 
-                    dimensions:
-                        result.dimensions
-                },
+                source:
+                    result.source,
+
+                dimensions:
+                    result.dimensions,
+
+                // ==============================================
+                // PROVEEDOR
+                // ==============================================
 
                 provider:
                     'nekos.best',
@@ -492,6 +441,10 @@ router.get('/', async (req, res) => {
 
                 fallback:
                     i > 0,
+
+                // ==============================================
+                // MENSAJE
+                // ==============================================
 
                 message:
                     `🎰 ¡Gacha! Obtuviste ${rarity.emoji} ${rarity.name}`
@@ -508,7 +461,7 @@ router.get('/', async (req, res) => {
                     );
 
             console.error(
-                `[GACHA] ${gachaId} → ${category} falló: ${errorMessage}`
+                `[GACHA] ${gachaId} → ${category} → ${errorMessage}`
             );
 
             errors.push({
@@ -520,13 +473,13 @@ router.get('/', async (req, res) => {
                     errorMessage
             });
 
-            // ==================================================
-            // PEQUEÑA ESPERA ANTES DEL FALLBACK
-            // ==================================================
+            // --------------------------------------------------
+            // Esperar antes del siguiente proveedor/categoría
+            // --------------------------------------------------
 
             if (
                 i <
-                MAX_ATTEMPTS - 1
+                maxAttempts - 1
             ) {
 
                 await sleep(300);
@@ -549,17 +502,8 @@ router.get('/', async (req, res) => {
         creator:
             'familybot-md',
 
-        gacha: {
-
-            id:
-                gachaId,
-
-            rarity:
-                rarity.name,
-
-            rarityEmoji:
-                rarity.emoji
-        },
+        gachaId:
+            gachaId,
 
         message:
             'No se pudo completar la tirada de Gacha en este momento',
@@ -568,21 +512,15 @@ router.get('/', async (req, res) => {
             'nekos.best',
 
         attempts:
-            Math.min(
-                MAX_ATTEMPTS,
-                categoryOrder.length
-            ),
+            maxAttempts,
 
-        /*
-         * No mostramos errores internos
-         * en producción.
-         */
+        fallback:
+            true,
+
         ...(process.env.NODE_ENV !== 'production'
             ? {
-
                 debug:
                     errors
-
             }
             : {})
     });
