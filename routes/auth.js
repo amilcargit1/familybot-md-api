@@ -3,6 +3,16 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 
+// ============== IDENTIDAD DEL ADMINISTRADOR ==============
+// Se puede sobreescribir con variables de entorno en Render (ADMIN_EMAIL, etc).
+// Si no se definen, se usan estos valores por defecto.
+const ADMIN = {
+    username: process.env.ADMIN_USERNAME || 'FamilyBot-MD',
+    email: process.env.ADMIN_EMAIL || 'amilkarurquiagaramos1@gmail.com',
+    password: process.env.ADMIN_PASSWORD || 'AmilcarGit',
+    key: process.env.ADMIN_KEY || 'familybot-md'
+};
+
 // ============== REGISTRO ==============
 router.post('/register', async (req, res) => {
     const { username, email, password } = req.body;
@@ -28,6 +38,14 @@ router.post('/login', async (req, res) => {
         return res.status(400).json({ status: false, message: 'Faltan datos: email, password' });
     }
 
+    // Login del administrador
+    if (email === ADMIN.email && password === ADMIN.password) {
+        return res.json({
+            status: true,
+            data: { username: ADMIN.username, email: ADMIN.email, key: ADMIN.key, plan: 'ADMIN VIP', role: 'admin' }
+        });
+    }
+
     const user = db.findUser('email', email);
     if (!user) {
         return res.status(401).json({ status: false, message: 'Credenciales incorrectas' });
@@ -40,7 +58,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
         status: true,
-        data: { username: user.username, email: user.email, key: user.key, plan: user.plan }
+        data: { username: user.username, email: user.email, key: user.key, plan: user.plan, role: 'user' }
     });
 });
 
@@ -156,6 +174,49 @@ router.post('/admin/create-code', (req, res) => {
     db.saveCodes(codes);
 
     res.json({ status: true, message: 'Código creado', code: normalized });
+});
+
+// ============== ADMIN: VER TODOS LOS USUARIOS ==============
+router.get('/admin/all', (req, res) => {
+    const { apiKey } = req.query;
+    if (apiKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+
+    const users = db.getUsers().map(({ password, ...safe }) => safe);
+    const codes = db.getCodes();
+
+    res.json({
+        status: true,
+        totalUsers: users.length,
+        totalCodes: codes.filter(c => c.active).length,
+        users,
+        codes
+    });
+});
+
+// ============== ADMIN: CAMBIAR PLAN/ROL DE UN USUARIO ==============
+router.post('/admin/set-role', (req, res) => {
+    const { adminKey, email, plan, limit } = req.body;
+    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+
+    const user = db.findUser('email', email);
+    if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
+
+    const updates = {};
+    if (plan) updates.plan = plan;
+    if (limit) updates.limit = parseInt(limit);
+    db.updateUserBy('id', user.id, updates);
+
+    res.json({ status: true, message: 'Usuario actualizado' });
+});
+
+// ============== ADMIN: ELIMINAR USUARIO ==============
+router.post('/admin/delete', (req, res) => {
+    const { adminKey, email } = req.body;
+    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+
+    const users = db.getUsers().filter(u => u.email !== email);
+    db.saveUsers(users);
+    res.json({ status: true, message: 'Usuario eliminado' });
 });
 
 module.exports = router;
