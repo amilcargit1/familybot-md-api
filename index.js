@@ -7,6 +7,7 @@ const PORT = process.env.PORT || 3000;
 global.startTime = Date.now();
 
 const { authHandler } = require('./middlewares/auth');
+const loadRoutes = require('./utils/loadRoutes');
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -18,27 +19,10 @@ app.get('/dash', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dash
 app.get('/profile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
-// ---- Rutas públicas ----
-app.use('/api/status', require('./routes/status'));
-app.use('/api/auth', require('./routes/auth'));
-
-// ---- Rutas protegidas (requieren ?apiKey=) ----
-// Herramientas
-app.use('/api/tools/qr', authHandler, require('./routes/tools/qr'));
-app.use('/api/tools/translate', authHandler, require('./routes/tools/translate'));
-
-// Descargas
-app.use('/api/download/tiktok', authHandler, require('./routes/download/tiktok'));
-app.use('/api/download/youtube', authHandler, require('./routes/download/youtube'));
-app.use('/api/download/instagram', authHandler, require('./routes/download/instagram'));
-
-// Búsquedas
-app.use('/api/search/tiktok', authHandler, require('./routes/search/tiktok'));
-
-// Anime
-app.use('/api/anime/reaction', authHandler, require('./routes/anime/reaction'));
-app.use('/api/anime/waifu', authHandler, require('./routes/anime/waifu'));
-app.use('/api/anime/gacha', authHandler, require('./routes/anime/gacha'));
+// ---- Carga automática de TODAS las rutas dentro de /routes ----
+// Para agregar un endpoint nuevo: solo crea el archivo en la carpeta
+// correcta (routes/<categoria>/<nombre>.js) — no hace falta editar este archivo.
+loadRoutes(app, authHandler);
 
 // ---- 404 ----
 app.use((req, res) => {
