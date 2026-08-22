@@ -27,7 +27,6 @@ router.get('/', (req, res) => {
             length = 16;
         }
 
-        // Límites para evitar contraseñas absurdamente grandes
         length = Math.max(4, Math.min(length, 128));
 
         const useUppercase = req.query.uppercase !== 'false';
@@ -95,27 +94,54 @@ router.meta = {
             label: 'Longitud',
             type: 'number',
             placeholder: '16',
-            default: 16
+            default: '16'
         },
         {
             name: 'uppercase',
             label: 'Mayúsculas',
             type: 'select',
-            options: ['true', 'false'],
+            options: [
+                {
+                    value: 'true',
+                    label: 'Sí'
+                },
+                {
+                    value: 'false',
+                    label: 'No'
+                }
+            ],
             default: 'true'
         },
         {
             name: 'numbers',
             label: 'Números',
             type: 'select',
-            options: ['true', 'false'],
+            options: [
+                {
+                    value: 'true',
+                    label: 'Sí'
+                },
+                {
+                    value: 'false',
+                    label: 'No'
+                }
+            ],
             default: 'true'
         },
         {
             name: 'symbols',
             label: 'Símbolos',
             type: 'select',
-            options: ['true', 'false'],
+            options: [
+                {
+                    value: 'true',
+                    label: 'Sí'
+                },
+                {
+                    value: 'false',
+                    label: 'No'
+                }
+            ],
             default: 'true'
         }
     ],
