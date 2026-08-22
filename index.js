@@ -35,6 +35,11 @@ app.use('/api/download/instagram', authHandler, require('./routes/download/insta
 // Búsquedas
 app.use('/api/search/tiktok', authHandler, require('./routes/search/tiktok'));
 
+// Anime
+app.use('/api/anime/reaction', authHandler, require('./routes/anime/reaction'));
+app.use('/api/anime/waifu', authHandler, require('./routes/anime/waifu'));
+app.use('/api/anime/gacha', authHandler, require('./routes/anime/gacha'));
+
 // ---- 404 ----
 app.use((req, res) => {
     if (req.path.startsWith('/api/')) {
