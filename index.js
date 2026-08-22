@@ -25,9 +25,15 @@ app.use('/api/auth', require('./routes/auth'));
 // ---- Rutas protegidas (requieren ?apiKey=) ----
 // Herramientas
 app.use('/api/tools/qr', authHandler, require('./routes/tools/qr'));
+app.use('/api/tools/translate', authHandler, require('./routes/tools/translate'));
 
 // Descargas
 app.use('/api/download/tiktok', authHandler, require('./routes/download/tiktok'));
+app.use('/api/download/youtube', authHandler, require('./routes/download/youtube'));
+app.use('/api/download/instagram', authHandler, require('./routes/download/instagram'));
+
+// Búsquedas
+app.use('/api/search/tiktok', authHandler, require('./routes/search/tiktok'));
 
 // ---- 404 ----
 app.use((req, res) => {
