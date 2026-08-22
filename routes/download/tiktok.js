@@ -12,7 +12,10 @@ router.get('/', async (req, res) => {
     try {
         const apiRes = await fetch('https://www.tikwm.com/api/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (iPad; U; CPU OS 3_2 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Version/4.0.4 Mobile/7B334b Safari/531.21.10'
+            },
             body: JSON.stringify({ url: videoURL })
         });
         const data = await apiRes.json();
@@ -57,5 +60,20 @@ router.get('/', async (req, res) => {
         res.status(500).json({ status: false, message: 'Error interno al procesar el video' });
     }
 });
+
+router.meta = {
+    title: 'Descargar video de TikTok',
+    description: 'Descarga sin marca de agua a partir del link',
+    icon: 'fab fa-tiktok',
+    fields: [
+        { name: 'url', label: 'Link de TikTok', placeholder: 'Pega el link del video...' }
+    ],
+    resultType: 'link',
+    resultField: 'data.media.no_watermark',
+    previewFields: [
+        { label: 'Título', field: 'data.title' },
+        { label: 'Autor', field: 'data.author.nickname' }
+    ]
+};
 
 module.exports = router;
