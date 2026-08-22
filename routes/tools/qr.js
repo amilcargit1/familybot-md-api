@@ -16,4 +16,15 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.meta = {
+    title: 'Generar código QR',
+    description: 'Convierte un texto o link en un código QR',
+    icon: 'fas fa-qrcode',
+    fields: [
+        { name: 'text', label: 'Texto o URL', placeholder: 'Escribe un texto o URL...' }
+    ],
+    resultType: 'image',
+    resultField: 'result'
+};
+
 module.exports = router;
