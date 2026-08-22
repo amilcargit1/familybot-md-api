@@ -62,4 +62,14 @@ router.get('/', async (req, res) => {
     res.json({ status: true, creator: 'familybot-md', total: results.length, results });
 });
 
+router.meta = {
+    title: 'Buscar en TikTok',
+    description: 'Busca videos por palabra clave',
+    icon: 'fas fa-magnifying-glass',
+    fields: [
+        { name: 'query', label: 'Buscar', placeholder: 'Ej: gatitos graciosos' }
+    ],
+    resultType: 'raw'
+};
+
 module.exports = router;
