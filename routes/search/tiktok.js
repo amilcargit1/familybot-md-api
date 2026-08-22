@@ -10,7 +10,11 @@ router.get('/', async (req, res) => {
     }
 
     try {
-        const apiRes = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(query)}&count=10`);
+        const apiRes = await fetch(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(query)}&count=10`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (iPad; U; CPU OS 3_2 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Version/4.0.4 Mobile/7B334b Safari/531.21.10'
+            }
+        });
         const data = await apiRes.json();
 
         if (data.code !== 0 || !data.data?.videos) {
