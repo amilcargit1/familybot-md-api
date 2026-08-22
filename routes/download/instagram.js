@@ -66,4 +66,16 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.meta = {
+    title: 'Descargar de Instagram',
+    description: 'Descarga fotos/videos públicos a partir del link',
+    icon: 'fab fa-instagram',
+    fields: [
+        { name: 'url', label: 'Link de Instagram', placeholder: 'Pega el link de Instagram...' }
+    ],
+    resultType: 'link',
+    resultField: 'data.media',
+    previewFields: [{ label: 'Título', field: 'data.title' }]
+};
+
 module.exports = router;
