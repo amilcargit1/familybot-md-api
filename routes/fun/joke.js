@@ -69,4 +69,13 @@ router.get('/', async (req, res) => {
     }
 })
 
+router.meta = {
+    title: 'Chiste aleatorio',
+    description: 'Devuelve un chiste corto al azar',
+    icon: 'fas fa-face-laugh',
+    fields: [],
+    resultType: 'text',
+    resultField: 'joke'
+};
+
 module.exports = router
