@@ -7,8 +7,7 @@ const WAIFU_API = 'https://api.waifu.pics/sfw'
 const TIMEOUT_MS = 10000
 const MAX_RETRIES = 2
 
-const USER_AGENT =
-    'FamilyBot-MD-API/1.0'
+const USER_AGENT = 'FamilyBot-MD-API/1.0'
 
 const ALLOWED = new Set([
     'angry',
@@ -105,6 +104,12 @@ function sleep(ms) {
     )
 }
 
+function randomId() {
+    return `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 12)}`
+}
+
 function isValidUrl(url) {
     if (typeof url !== 'string') {
         return false
@@ -169,7 +174,7 @@ async function fetchJson(url) {
     }
 }
 
-async function fetchImage(url) {
+async function downloadImage(url) {
     const controller =
         new AbortController()
 
@@ -186,9 +191,7 @@ async function fetchImage(url) {
                     Accept:
                         'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
                     'User-Agent':
-                        USER_AGENT,
-                    Referer:
-                        'https://nekos.best/'
+                        USER_AGENT
                 },
                 signal: controller.signal
             })
@@ -237,7 +240,7 @@ async function fetchImage(url) {
     }
 }
 
-async function getFromNekosBest(type) {
+async function getNekosBest(type) {
     let lastError = null
 
     for (
@@ -247,16 +250,16 @@ async function getFromNekosBest(type) {
     ) {
         try {
             const url =
-                `${NEKOSBEST_API}/${encodeURIComponent(type)}?amount=1&v=${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 10)}`
+                `${NEKOSBEST_API}/${encodeURIComponent(type)}?amount=1&v=${randomId()}`
 
             const data =
                 await fetchJson(url)
 
             if (
                 !data ||
-                !Array.isArray(data.results) ||
+                !Array.isArray(
+                    data.results
+                ) ||
                 data.results.length === 0
             ) {
                 throw new Error(
@@ -281,20 +284,17 @@ async function getFromNekosBest(type) {
                 )
             }
 
-            return {
-                success: true,
-                provider: 'nekos.best',
-                result
-            }
+            return result
         } catch (error) {
             lastError = error
 
             console.error(
-                `[NEKOSBEST] ${type} intento ${attempt}/${MAX_RETRIES}: ${error.message}`
+                `[NekosBest] ${type} intento ${attempt}: ${error.message}`
             )
 
             if (
-                attempt < MAX_RETRIES
+                attempt <
+                MAX_RETRIES
             ) {
                 await sleep(500)
             }
@@ -309,20 +309,18 @@ async function getFromNekosBest(type) {
     )
 }
 
-async function getFromWaifu(type) {
-    const fallbackType =
+async function getWaifuPics(type) {
+    const fallback =
         WAIFU_FALLBACK[type]
 
-    if (!fallbackType) {
+    if (!fallback) {
         throw new Error(
-            `No existe fallback para ${type}`
+            `Waifu.pics no tiene fallback para ${type}`
         )
     }
 
     const url =
-        `${WAIFU_API}/${encodeURIComponent(fallbackType)}?v=${Date.now()}-${Math.random()
-            .toString(36)
-            .slice(2, 10)}`
+        `${WAIFU_API}/${encodeURIComponent(fallback)}?v=${randomId()}`
 
     const data =
         await fetchJson(url)
@@ -337,44 +335,78 @@ async function getFromWaifu(type) {
     }
 
     return {
-        success: true,
-        provider: 'waifu.pics',
-        result: {
-            url: data.url
-        }
+        url: data.url
     }
 }
 
-async function getReaction(type) {
+async function getImageFromNekosBest(type) {
+    const result =
+        await getNekosBest(type)
+
     try {
-        const response =
-            await getFromNekosBest(type)
+        const image =
+            await downloadImage(
+                result.url
+            )
 
         return {
-            ...response,
-            fallback: false
+            image,
+            provider: 'nekos.best',
+            fallback: false,
+            originalUrl:
+                result.url,
+            result
         }
     } catch (error) {
         console.error(
-            `[ANIME] NekosBest falló: ${error.message}`
+            `[NekosBest IMAGE] ${type}: ${error.message}`
+        )
+
+        throw error
+    }
+}
+
+async function getImageFromWaifu(type) {
+    const result =
+        await getWaifuPics(type)
+
+    const image =
+        await downloadImage(
+            result.url
+        )
+
+    return {
+        image,
+        provider: 'waifu.pics',
+        fallback: true,
+        originalUrl:
+            result.url,
+        result
+    }
+}
+
+async function getFinalImage(type) {
+    try {
+        return await getImageFromNekosBest(
+            type
+        )
+    } catch (nekosError) {
+        console.error(
+            `[FALLBACK] NekosBest falló completamente: ${nekosError.message}`
         )
     }
 
     try {
-        const response =
-            await getFromWaifu(type)
-
-        return {
-            ...response,
-            fallback: true
-        }
-    } catch (error) {
+        return await getImageFromWaifu(
+            type
+        )
+    } catch (waifuError) {
         console.error(
-            `[ANIME] Waifu.pics falló: ${error.message}`
+            `[FALLBACK] Waifu.pics también falló: ${waifuError.message}`
         )
 
         throw new Error(
-            'Todos los proveedores fallaron'
+            'NekosBest y Waifu.pics no pudieron entregar una imagen'
         )
     }
 }
@@ -412,12 +444,6 @@ router.get('/', async (req, res) => {
     }
 
     try {
-        const response =
-            await getReaction(type)
-
-        const result =
-            response.result
-
         const host =
             `${req.protocol}://${req.get('host')}`
 
@@ -427,9 +453,7 @@ router.get('/', async (req, res) => {
                 : ''
 
         const cacheBust =
-            `${Date.now()}-${Math.random()
-                .toString(36)
-                .slice(2, 10)}`
+            randomId()
 
         const proxyUrl =
             `${host}/api/anime/reaction/image?apiKey=${encodeURIComponent(apiKey)}&type=${encodeURIComponent(type)}&v=${cacheBust}`
@@ -439,23 +463,8 @@ router.get('/', async (req, res) => {
             creator: 'familybot-md',
             type,
             url: proxyUrl,
-            original_url: result.url,
-            provider:
-                response.provider,
-            fallback:
-                response.fallback,
-            anime:
-                result.anime_name ||
-                null,
-            artist:
-                result.artist_name ||
-                null,
-            source:
-                result.source_url ||
-                null,
-            dimensions:
-                result.dimensions ||
-                null
+            proxy: true,
+            cache: false
         })
     } catch (error) {
         console.error(
@@ -467,11 +476,7 @@ router.get('/', async (req, res) => {
             creator: 'familybot-md',
             type,
             message:
-                'No se pudo obtener la reacción anime en este momento',
-            provider:
-                'nekos.best',
-            fallback:
-                'waifu.pics'
+                'No se pudo preparar la reacción anime'
         })
     }
 })
@@ -497,25 +502,17 @@ router.get('/image', async (req, res) => {
     }
 
     try {
-        const response =
-            await getReaction(type)
-
-        const imageUrl =
-            response.result.url
-
-        const image =
-            await fetchImage(
-                imageUrl
-            )
+        const result =
+            await getFinalImage(type)
 
         res.setHeader(
             'Content-Type',
-            image.contentType
+            result.image.contentType
         )
 
         res.setHeader(
             'Content-Length',
-            image.buffer.length
+            result.image.buffer.length
         )
 
         res.setHeader(
@@ -540,26 +537,28 @@ router.get('/image', async (req, res) => {
 
         res.setHeader(
             'X-FamilyBot-Provider',
-            response.provider
+            result.provider
         )
 
         res.setHeader(
             'X-FamilyBot-Fallback',
             String(
-                response.fallback
+                result.fallback
             )
         )
 
         return res
             .status(200)
-            .send(image.buffer)
+            .send(
+                result.image.buffer
+            )
     } catch (error) {
         console.error(
-            `[PROXY] ${type}: ${error.message}`
+            `[PROXY FINAL] ${type}: ${error.message}`
         )
 
         return res.status(502).send(
-            'No se pudo descargar la imagen'
+            'No se pudo obtener ninguna imagen de reacción'
         )
     }
 })
