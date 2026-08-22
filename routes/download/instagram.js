@@ -1,6 +1,22 @@
 const express = require('express');
 const router = express.Router();
 
+const BROWSER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+    'Accept-Language': 'en-US,en;q=0.9'
+};
+
+function extractMedia(html) {
+    const videoMatch = html.match(/<meta property="og:video" content="([^"]+)"/);
+    const imageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+    return {
+        media: videoMatch?.[1] || imageMatch?.[1],
+        type: videoMatch ? 'video' : (imageMatch ? 'image' : null),
+        title: titleMatch?.[1]?.replace(/&quot;/g, '"')
+    };
+}
+
 // GET /api/download/instagram?apiKey=...&url=...
 router.get('/', async (req, res) => {
     const { url } = req.query;
@@ -13,24 +29,24 @@ router.get('/', async (req, res) => {
     }
 
     try {
-        const pageRes = await fetch(url, {
-            headers: {
-                // Instagram sirve contenido distinto según el User-Agent; este simula un navegador normal
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
-            }
-        });
+        // Intento 1: la página normal del post
+        const pageRes = await fetch(url, { headers: BROWSER_HEADERS });
         const html = await pageRes.text();
+        let result = extractMedia(html);
 
-        const videoMatch = html.match(/<meta property="og:video" content="([^"]+)"/);
-        const imageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
-        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+        // Intento 2 (respaldo): la versión "embed", que a veces Instagram sirve
+        // de forma más simple para posts públicos
+        if (!result.media) {
+            const embedUrl = url.replace(/\/?$/, '/') + 'embed/captioned/';
+            const embedRes = await fetch(embedUrl, { headers: BROWSER_HEADERS });
+            const embedHtml = await embedRes.text();
+            result = extractMedia(embedHtml);
+        }
 
-        const media = videoMatch?.[1] || imageMatch?.[1];
-
-        if (!media) {
+        if (!result.media) {
             return res.status(500).json({
                 status: false,
-                message: 'No se pudo extraer el contenido. Puede que la publicación sea privada, o que sea una historia/reel que Instagram bloquea sin sesión.'
+                message: 'No se pudo extraer el contenido. Instagram bloquea activamente el scraping sin sesión, sobre todo en Reels e Historias — funciona mejor con publicaciones de fotos públicas.'
             });
         }
 
@@ -38,9 +54,9 @@ router.get('/', async (req, res) => {
             status: true,
             creator: 'familybot-md',
             data: {
-                type: videoMatch ? 'video' : 'image',
-                title: titleMatch?.[1]?.replace(/&quot;/g, '"') || 'Publicación de Instagram',
-                media
+                type: result.type,
+                title: result.title || 'Publicación de Instagram',
+                media: result.media
             }
         });
 
