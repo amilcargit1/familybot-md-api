@@ -2,81 +2,89 @@ const express = require('express');
 const router = express.Router();
 
 /*
- * ╔══════════════════════════════════════════════╗
- * ║          FamilyBot-MD Anime API             ║
- * ║              Waifu Aleatoria                ║
- * ╚══════════════════════════════════════════════╝
+ * ╔══════════════════════════════════════════════════╗
+ * ║              FamilyBot-MD API                   ║
+ * ║                 Random Waifu                    ║
+ * ╚══════════════════════════════════════════════════╝
  *
  * Endpoint:
  *
  * GET /api/anime/waifu?apiKey=TU_API_KEY
  *
- * Proveedor principal:
- * https://nekos.best/api/v2/waifu
+ * Proveedores:
  *
- * Fallback:
- * https://api.waifu.pics/sfw/waifu
+ * 1. NekosBest
+ * 2. Waifu.im
+ * 3. Waifu.pics
+ *
+ * Si uno falla, automáticamente intenta el siguiente.
  */
 
 // ======================================================
 // CONFIGURACIÓN
 // ======================================================
 
-const NEKOSBEST_API =
-    'https://nekos.best/api/v2/waifu';
-
-const WAIFU_API =
-    'https://api.waifu.pics/sfw/waifu';
-
-const TIMEOUT_MS = 10000;
-
-const MAX_RETRIES = 2;
+const TIMEOUT_MS = 8000;
 
 // ======================================================
-// ESPERA
+// PROVEEDORES
 // ======================================================
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+const PROVIDERS = [
+    {
+        name: 'nekos.best',
+        url: 'https://nekos.best/api/v2/waifu'
+    },
+
+    {
+        name: 'waifu.im',
+        url: 'https://api.waifu.im/images?IncludedTags=waifu'
+    },
+
+    {
+        name: 'waifu.pics',
+        url: 'https://api.waifu.pics/sfw/waifu'
+    }
+];
 
 // ======================================================
-// FETCH JSON CON TIMEOUT
+// FETCH CON TIMEOUT
 // ======================================================
 
-async function fetchJson(url) {
+async function fetchJson(url, extraHeaders = {}) {
 
-    const controller = new AbortController();
+    const controller =
+        new AbortController();
 
-    const timeout = setTimeout(() => {
-        controller.abort();
-    }, TIMEOUT_MS);
+    const timeout =
+        setTimeout(() => {
+            controller.abort();
+        }, TIMEOUT_MS);
 
     try {
 
-        const response = await fetch(url, {
+        const response =
+            await fetch(url, {
 
-            method: 'GET',
+                method: 'GET',
 
-            headers: {
+                headers: {
 
-                'Accept':
-                    'application/json',
+                    'Accept':
+                        'application/json',
 
-                /*
-                 * NekosBest requiere un User-Agent
-                 * identificable.
-                 */
-                'User-Agent':
-                    'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)',
+                    /*
+                     * User-Agent identificable para NekosBest.
+                     */
+                    'User-Agent':
+                        'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)',
 
-                'Cache-Control':
-                    'no-cache'
-            },
+                    ...extraHeaders
+                },
 
-            signal:
-                controller.signal
-        });
+                signal:
+                    controller.signal
+            });
 
         // ==================================================
         // VALIDAR HTTP
@@ -90,7 +98,7 @@ async function fetchJson(url) {
         }
 
         // ==================================================
-        // VALIDAR CONTENT-TYPE
+        // VALIDAR JSON
         // ==================================================
 
         const contentType =
@@ -105,7 +113,7 @@ async function fetchJson(url) {
         ) {
 
             throw new Error(
-                'El proveedor no devolvió JSON'
+                'La respuesta no es JSON'
             );
         }
 
@@ -118,168 +126,256 @@ async function fetchJson(url) {
 }
 
 // ======================================================
-// NEKOSBEST
+// VALIDAR URL
 // ======================================================
 
-async function getFromNekosBest() {
+function isValidUrl(url) {
 
-    let lastError = null;
-
-    for (
-        let attempt = 1;
-        attempt <= MAX_RETRIES;
-        attempt++
+    if (
+        typeof url !== 'string'
     ) {
-
-        try {
-
-            const data =
-                await fetchJson(
-                    NEKOSBEST_API
-                );
-
-            // ==================================================
-            // VALIDAR RESPUESTA
-            // ==================================================
-
-            if (
-                !data ||
-                !Array.isArray(
-                    data.results
-                ) ||
-                data.results.length === 0
-            ) {
-
-                throw new Error(
-                    'NekosBest no devolvió resultados'
-                );
-            }
-
-            const result =
-                data.results[0];
-
-            // ==================================================
-            // VALIDAR URL
-            // ==================================================
-
-            if (
-                !result ||
-                typeof result.url !== 'string'
-            ) {
-
-                throw new Error(
-                    'NekosBest devolvió una URL inválida'
-                );
-            }
-
-            if (
-                !result.url.startsWith(
-                    'https://'
-                ) &&
-                !result.url.startsWith(
-                    'http://'
-                )
-            ) {
-
-                throw new Error(
-                    'La URL de la imagen no es válida'
-                );
-            }
-
-            return {
-
-                success: true,
-
-                provider:
-                    'nekos.best',
-
-                result
-            };
-
-        } catch (error) {
-
-            lastError =
-                error;
-
-            console.error(
-                `[NEKOSBEST/WAIFU] Intento ${attempt}/${MAX_RETRIES}:`,
-                error.message
-            );
-
-            if (
-                attempt <
-                MAX_RETRIES
-            ) {
-
-                await sleep(500);
-            }
-        }
+        return false;
     }
 
-    throw (
-        lastError ||
-        new Error(
-            'NekosBest no disponible'
-        )
-    );
+    try {
+
+        const parsed =
+            new URL(url);
+
+        return (
+            parsed.protocol === 'https:' ||
+            parsed.protocol === 'http:'
+        );
+
+    } catch {
+
+        return false;
+    }
 }
 
 // ======================================================
-// FALLBACK WAIFU.PICS
+// PROVEEDOR 1
+// NEKOSBEST
 // ======================================================
 
-async function getFromWaifuPics() {
+async function getNekosBest() {
+
+    const provider =
+        PROVIDERS[0];
 
     const data =
         await fetchJson(
-            WAIFU_API
+            provider.url
         );
 
-    // ==================================================
-    // VALIDAR RESPUESTA
-    // ==================================================
+    // NekosBest:
+    // { results: [{ url, dimensions, ... }] }
 
     if (
         !data ||
-        typeof data.url !== 'string'
+        !Array.isArray(data.results) ||
+        data.results.length === 0
     ) {
 
         throw new Error(
-            'Waifu.pics devolvió una respuesta inválida'
+            'No devolvió resultados'
         );
     }
 
-    // ==================================================
-    // VALIDAR URL
-    // ==================================================
+    const result =
+        data.results[0];
 
     if (
-        !data.url.startsWith(
-            'https://'
-        ) &&
-        !data.url.startsWith(
-            'http://'
-        )
+        !result ||
+        !isValidUrl(result.url)
     ) {
 
         throw new Error(
-            'La URL del fallback no es válida'
+            'URL inválida'
         );
     }
 
     return {
 
-        success: true,
+        provider:
+            provider.name,
+
+        url:
+            result.url,
+
+        artist:
+            result.artist_name || null,
+
+        artist_url:
+            result.artist_href || null,
+
+        source:
+            result.source_url || null,
+
+        dimensions:
+            result.dimensions || null
+    };
+}
+
+// ======================================================
+// PROVEEDOR 2
+// WAIFU.IM
+// ======================================================
+
+async function getWaifuIm() {
+
+    const provider =
+        PROVIDERS[1];
+
+    const data =
+        await fetchJson(
+            provider.url,
+            {
+                /*
+                 * Fijamos la versión actual
+                 * para evitar cambios inesperados.
+                 */
+                'Accept-Version': 'v7'
+            }
+        );
+
+    // Waifu.im v7:
+    // { items: [{ url, ... }] }
+
+    if (
+        !data ||
+        !Array.isArray(data.items) ||
+        data.items.length === 0
+    ) {
+
+        throw new Error(
+            'No devolvió imágenes'
+        );
+    }
+
+    const image =
+        data.items[0];
+
+    if (
+        !image ||
+        !isValidUrl(image.url)
+    ) {
+
+        throw new Error(
+            'URL inválida'
+        );
+    }
+
+    return {
 
         provider:
-            'waifu.pics',
+            provider.name,
 
-        result: {
+        url:
+            image.url,
 
-            url:
-                data.url
+        artist:
+            Array.isArray(image.artists) &&
+            image.artists.length > 0
+                ? image.artists[0].name
+                : null,
+
+        artist_url:
+            Array.isArray(image.artists) &&
+            image.artists.length > 0
+                ? (
+                    image.artists[0].pixiv ||
+                    image.artists[0].twitter ||
+                    null
+                )
+                : null,
+
+        source:
+            image.source || null,
+
+        dimensions: {
+
+            width:
+                image.width || null,
+
+            height:
+                image.height || null
         }
     };
+}
+
+// ======================================================
+// PROVEEDOR 3
+// WAIFU.PICS
+// ======================================================
+
+async function getWaifuPics() {
+
+    const provider =
+        PROVIDERS[2];
+
+    const data =
+        await fetchJson(
+            provider.url
+        );
+
+    // Waifu.pics:
+    // { url: "..." }
+
+    if (
+        !data ||
+        !isValidUrl(data.url)
+    ) {
+
+        throw new Error(
+            'URL inválida'
+        );
+    }
+
+    return {
+
+        provider:
+            provider.name,
+
+        url:
+            data.url,
+
+        artist:
+            null,
+
+        artist_url:
+            null,
+
+        source:
+            null,
+
+        dimensions:
+            null
+    };
+}
+
+// ======================================================
+// EJECUTAR PROVEEDOR
+// ======================================================
+
+async function executeProvider(index) {
+
+    switch (index) {
+
+        case 0:
+            return await getNekosBest();
+
+        case 1:
+            return await getWaifuIm();
+
+        case 2:
+            return await getWaifuPics();
+
+        default:
+            throw new Error(
+                'Proveedor desconocido'
+            );
+    }
 }
 
 // ======================================================
@@ -288,69 +384,37 @@ async function getFromWaifuPics() {
 
 router.get('/', async (req, res) => {
 
+    const errors = [];
+
     // ==================================================
-    // NEKOSBEST
+    // CASCADA
     // ==================================================
 
-    try {
+    for (
+        let i = 0;
+        i < PROVIDERS.length;
+        i++
+    ) {
 
-        const response =
-            await getFromNekosBest();
-
-        const result =
-            response.result;
-
-        return res.status(200).json({
-
-            status: true,
-
-            creator:
-                'familybot-md',
-
-            type:
-                'waifu',
-
-            url:
-                result.url,
-
-            provider:
-                response.provider,
-
-            fallback:
-                false,
-
-            artist:
-                result.artist_name ||
-                null,
-
-            artist_url:
-                result.artist_href ||
-                null,
-
-            source:
-                result.source_url ||
-                null,
-
-            dimensions:
-                result.dimensions ||
-                null
-        });
-
-    } catch (nekosError) {
-
-        console.error(
-            '[ANIME/WAIFU] NekosBest falló:',
-            nekosError.message
-        );
-
-        // ==================================================
-        // FALLBACK
-        // ==================================================
+        const provider =
+            PROVIDERS[i];
 
         try {
 
-            const fallback =
-                await getFromWaifuPics();
+            console.log(
+                `[ANIME/WAIFU] Probando ${provider.name}...`
+            );
+
+            const result =
+                await executeProvider(i);
+
+            // ==================================================
+            // ÉXITO
+            // ==================================================
+
+            console.log(
+                `[ANIME/WAIFU] ${provider.name} respondió correctamente`
+            );
 
             return res.status(200).json({
 
@@ -363,70 +427,96 @@ router.get('/', async (req, res) => {
                     'waifu',
 
                 url:
-                    fallback.result.url,
+                    result.url,
 
                 provider:
-                    fallback.provider,
+                    result.provider,
 
+                /*
+                 * false = funcionó el primero
+                 * true  = se necesitó fallback
+                 */
                 fallback:
-                    true,
+                    i > 0,
 
-                message:
-                    'Se utilizó el proveedor de respaldo'
+                fallbackLevel:
+                    i,
+
+                artist:
+                    result.artist,
+
+                artist_url:
+                    result.artist_url,
+
+                source:
+                    result.source,
+
+                dimensions:
+                    result.dimensions
             });
 
-        } catch (fallbackError) {
+        } catch (error) {
+
+            const errorMessage =
+                error?.name === 'AbortError'
+                    ? 'Timeout'
+                    : (
+                        error?.message ||
+                        'Error desconocido'
+                    );
 
             console.error(
-                '[ANIME/WAIFU] Fallback falló:',
-                fallbackError.message
+                `[ANIME/WAIFU] ${provider.name} falló: ${errorMessage}`
             );
 
-            // ==================================================
-            // TODOS LOS PROVEEDORES FALLARON
-            // ==================================================
+            errors.push({
 
-            return res.status(502).json({
+                provider:
+                    provider.name,
 
-                status: false,
-
-                creator:
-                    'familybot-md',
-
-                type:
-                    'waifu',
-
-                message:
-                    'No se pudo obtener una waifu en este momento',
-
-                providers: {
-
-                    primary:
-                        'nekos.best',
-
-                    fallback:
-                        'waifu.pics'
-                },
-
-                // Solo mostrar información de debug
-                // fuera de producción.
-                ...(process.env.NODE_ENV !== 'production'
-                    ? {
-
-                        debug: {
-
-                            nekosbest:
-                                nekosError.message,
-
-                            fallback:
-                                fallbackError.message
-                        }
-
-                    }
-                    : {})
+                error:
+                    errorMessage
             });
         }
     }
+
+    // ==================================================
+    // TODOS FALLARON
+    // ==================================================
+
+    console.error(
+        '[ANIME/WAIFU] Todos los proveedores fallaron'
+    );
+
+    return res.status(502).json({
+
+        status: false,
+
+        creator:
+            'familybot-md',
+
+        type:
+            'waifu',
+
+        message:
+            'Todos los proveedores de waifus están temporalmente fuera de servicio',
+
+        providers:
+            PROVIDERS.map(
+                provider =>
+                    provider.name
+            ),
+
+        /*
+         * Solo mostramos detalles fuera de producción.
+         */
+        ...(process.env.NODE_ENV !== 'production'
+            ? {
+                debug:
+                    errors
+            }
+            : {})
+    });
 });
 
 // ======================================================
