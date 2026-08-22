@@ -57,4 +57,23 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.meta = {
+    title: 'Descargar de YouTube',
+    description: 'Descarga video o solo audio a partir del link',
+    icon: 'fab fa-youtube',
+    fields: [
+        { name: 'url', label: 'Link de YouTube', placeholder: 'Pega el link del video...' },
+        {
+            name: 'type', label: 'Tipo', type: 'select', default: 'video',
+            options: [
+                { value: 'video', label: 'Video (con audio)' },
+                { value: 'audio', label: 'Solo audio' }
+            ]
+        }
+    ],
+    resultType: 'link',
+    resultField: 'data.download',
+    previewFields: [{ label: 'Duración (segundos)', field: 'data.duration_seconds' }]
+};
+
 module.exports = router;
