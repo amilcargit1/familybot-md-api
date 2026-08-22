@@ -111,7 +111,7 @@ router.post('/update-profile', async (req, res) => {
 
 // ============== ESTADÍSTICAS GLOBALES (para la portada) ==============
 router.get('/stats', (req, res) => {
-    res.json({ status: true, users: db.countUsers(), endpoints: 6 });
+    res.json({ status: true, users: db.countUsers(), endpoints: 9 });
 });
 
 // ============== CANJEAR CÓDIGO ==============
