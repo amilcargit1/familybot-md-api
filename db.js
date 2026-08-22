@@ -96,6 +96,7 @@ function saveCodes(codes) {
 
 module.exports = {
     getUsers,
+    saveUsers,
     findUser,
     createUser,
     updateUserBy,
