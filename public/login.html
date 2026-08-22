@@ -154,6 +154,7 @@
 
                 localStorage.setItem('familybot_key', data.data.key);
                 localStorage.setItem('familybot_username', data.data.username);
+                localStorage.setItem('familybot_role', data.data.role || 'user');
                 msg.classList.add('success');
                 msg.innerText = '¡Bienvenido de nuevo!';
                 setTimeout(() => { window.location.href = '/dash'; }, 600);
