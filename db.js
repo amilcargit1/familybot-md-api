@@ -24,6 +24,11 @@ async function redisCommand(command) {
         body: JSON.stringify(command)
     });
     const data = await res.json();
+    if (data.error) {
+        // No lanzamos el error (podría tumbar una solicitud sin try/catch);
+        // lo dejamos bien visible en los logs de Render para poder diagnosticarlo.
+        console.error(`❌ Error de Upstash Redis en comando [${command[0]}]:`, data.error);
+    }
     return data.result;
 }
 
