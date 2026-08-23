@@ -11,14 +11,12 @@ async function fetchWithTimeout(url, timeout = 10000) {
     }, timeout);
 
     try {
-        const response = await fetch(url, {
+        return await fetch(url, {
             signal: controller.signal,
             headers: {
                 'User-Agent': 'FamilyBot-MD-API'
             }
         });
-
-        return response;
     } finally {
         clearTimeout(timer);
     }
@@ -26,7 +24,7 @@ async function fetchWithTimeout(url, timeout = 10000) {
 
 router.get('/', async (req, res) => {
     try {
-        const response = await fetchWithTimeout(API_URL, 10000);
+        const response = await fetchWithTimeout(API_URL);
 
         if (!response.ok) {
             throw new Error(`Cat API respondió ${response.status}`);
@@ -34,7 +32,11 @@ router.get('/', async (req, res) => {
 
         const data = await response.json();
 
-        if (!Array.isArray(data) || !data[0] || !data[0].url) {
+        if (
+            !Array.isArray(data) ||
+            !data[0] ||
+            !data[0].url
+        ) {
             throw new Error('Respuesta inválida de The Cat API');
         }
 
@@ -70,7 +72,7 @@ router.meta = {
     icon: 'fas fa-cat',
     fields: [],
     resultType: 'image',
-    resultField: 'url'
+    resultField: 'result.url'
 };
 
 module.exports = router;
