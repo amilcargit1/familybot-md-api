@@ -20,13 +20,13 @@ router.post('/register', async (req, res) => {
         return res.status(400).json({ status: false, message: 'Faltan datos: username, email, password' });
     }
 
-    const exists = db.findUser('email', email) || db.findUser('username', username);
+    const exists = (await db.findUser('email', email)) || (await db.findUser('username', username));
     if (exists) {
         return res.status(400).json({ status: false, message: 'Ese usuario o correo ya existe' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = db.createUser({ username, email, password: hashedPassword });
+    const newUser = await db.createUser({ username, email, password: hashedPassword });
 
     res.json({ status: true, message: 'Registro exitoso', key: newUser.key });
 });
@@ -46,7 +46,7 @@ router.post('/login', async (req, res) => {
         });
     }
 
-    const user = db.findUser('email', email);
+    const user = await db.findUser('email', email);
     if (!user) {
         return res.status(401).json({ status: false, message: 'Credenciales incorrectas' });
     }
@@ -63,11 +63,11 @@ router.post('/login', async (req, res) => {
 });
 
 // ============== MI PERFIL (usado por el dashboard para mostrar solicitudes) ==============
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
     const { apiKey } = req.query;
     if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
 
-    const user = db.findUser('key', apiKey);
+    const user = await db.findUser('key', apiKey);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
     const today = new Date().toISOString().split('T')[0];
@@ -94,7 +94,7 @@ router.post('/update-profile', async (req, res) => {
     const { apiKey, username, password } = req.body;
     if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
 
-    const user = db.findUser('key', apiKey);
+    const user = await db.findUser('key', apiKey);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
     const updates = {};
@@ -105,27 +105,27 @@ router.post('/update-profile', async (req, res) => {
         return res.status(400).json({ status: false, message: 'No enviaste ningún cambio' });
     }
 
-    db.updateUserBy('id', user.id, updates);
+    await db.updateUserBy('id', user.id, updates);
     res.json({ status: true, message: 'Perfil actualizado correctamente' });
 });
 
 // ============== ESTADÍSTICAS GLOBALES (para la portada) ==============
-router.get('/stats', (req, res) => {
-    res.json({ status: true, users: db.countUsers(), endpoints: 9 });
+router.get('/stats', async (req, res) => {
+    res.json({ status: true, users: await db.countUsers(), endpoints: 9 });
 });
 
 // ============== CANJEAR CÓDIGO ==============
-router.post('/redeem', (req, res) => {
+router.post('/redeem', async (req, res) => {
     const { apiKey, code } = req.body;
     if (!apiKey || !code) {
         return res.status(400).json({ status: false, message: 'Faltan datos: apiKey, code' });
     }
 
-    const user = db.findUser('key', apiKey);
+    const user = await db.findUser('key', apiKey);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
     const normalized = code.trim().toUpperCase();
-    const codes = db.getCodes();
+    const codes = await db.getCodes();
     const found = codes.find(c => c.code === normalized);
 
     if (!found) return res.status(404).json({ status: false, message: 'Código no válido' });
@@ -134,12 +134,12 @@ router.post('/redeem', (req, res) => {
     if (found.usedBy.includes(user.email)) return res.status(400).json({ status: false, message: 'Ya canjeaste este código antes' });
 
     const newLimit = (user.limit || 100) + found.requests;
-    db.updateUserBy('id', user.id, { limit: newLimit });
+    await db.updateUserBy('id', user.id, { limit: newLimit });
 
     found.uses += 1;
     found.usedBy.push(user.email);
     if (found.uses >= found.maxUses) found.active = false;
-    db.saveCodes(codes);
+    await db.saveCodes(codes);
 
     res.json({
         status: true,
@@ -149,15 +149,14 @@ router.post('/redeem', (req, res) => {
 });
 
 // ============== ADMIN: CREAR CÓDIGO ==============
-router.post('/admin/create-code', (req, res) => {
-    const ADMIN_KEY = process.env.ADMIN_KEY || 'familybot-md';
+router.post('/admin/create-code', async (req, res) => {
     const { adminKey, code, requests, maxUses } = req.body;
 
-    if (adminKey !== ADMIN_KEY) return res.status(403).json({ status: false, message: 'No autorizado' });
+    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
     if (!code || !requests || !maxUses) return res.status(400).json({ status: false, message: 'Faltan datos' });
 
     const normalized = code.trim().toUpperCase();
-    const codes = db.getCodes();
+    const codes = await db.getCodes();
     if (codes.find(c => c.code === normalized)) {
         return res.status(400).json({ status: false, message: 'Ese código ya existe' });
     }
@@ -171,18 +170,19 @@ router.post('/admin/create-code', (req, res) => {
         active: true,
         createdAt: new Date().toISOString()
     });
-    db.saveCodes(codes);
+    await db.saveCodes(codes);
 
     res.json({ status: true, message: 'Código creado', code: normalized });
 });
 
-// ============== ADMIN: VER TODOS LOS USUARIOS ==============
-router.get('/admin/all', (req, res) => {
+// ============== ADMIN: VER TODOS LOS USUARIOS Y CÓDIGOS ==============
+router.get('/admin/all', async (req, res) => {
     const { apiKey } = req.query;
     if (apiKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
 
-    const users = db.getUsers().map(({ password, ...safe }) => safe);
-    const codes = db.getCodes();
+    const allUsers = await db.getUsers();
+    const users = allUsers.map(({ password, ...safe }) => safe);
+    const codes = await db.getCodes();
 
     res.json({
         status: true,
@@ -194,28 +194,29 @@ router.get('/admin/all', (req, res) => {
 });
 
 // ============== ADMIN: CAMBIAR PLAN/ROL DE UN USUARIO ==============
-router.post('/admin/set-role', (req, res) => {
+router.post('/admin/set-role', async (req, res) => {
     const { adminKey, email, plan, limit } = req.body;
     if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
 
-    const user = db.findUser('email', email);
+    const user = await db.findUser('email', email);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
     const updates = {};
     if (plan) updates.plan = plan;
     if (limit) updates.limit = parseInt(limit);
-    db.updateUserBy('id', user.id, updates);
+    await db.updateUserBy('id', user.id, updates);
 
     res.json({ status: true, message: 'Usuario actualizado' });
 });
 
 // ============== ADMIN: ELIMINAR USUARIO ==============
-router.post('/admin/delete', (req, res) => {
+router.post('/admin/delete', async (req, res) => {
     const { adminKey, email } = req.body;
     if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
 
-    const users = db.getUsers().filter(u => u.email !== email);
-    db.saveUsers(users);
+    const allUsers = await db.getUsers();
+    const users = allUsers.filter(u => u.email !== email);
+    await db.saveUsers(users);
     res.json({ status: true, message: 'Usuario eliminado' });
 });
 
