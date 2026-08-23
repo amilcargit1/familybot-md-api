@@ -14,23 +14,33 @@
         --accent: #ec4899;
         --accent-purple: #a855f7;
         --accent-gradient: linear-gradient(135deg, #ec4899, #a855f7);
+        --border-color: rgba(255,255,255,0.07);
         --radius: 20px;
     }
+    :root[data-theme="light"] {
+        --bg-primary: #f3f4f8;
+        --bg-card: #ffffff;
+        --text-primary: #1a1d29;
+        --text-secondary: #64748b;
+        --border-color: rgba(15,23,42,0.08);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; min-height: 100vh; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; min-height: 100vh; transition: background 0.3s ease, color 0.3s ease; }
     header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 18px 20px; border-bottom: 1px solid var(--border-color);
         position: sticky; top: 0; background: var(--bg-primary); z-index: 10;
+        transition: background 0.3s ease, border-color 0.3s ease;
     }
     .brand { font-weight: 800; font-size: 1.1rem; }
     .brand span { background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .back-btn { background: none; border: 1px solid rgba(255,255,255,0.1); color: var(--text-secondary); padding: 8px 14px; border-radius: 10px; font-size: 0.8rem; cursor: pointer; text-decoration: none; }
+    .header-actions { display: flex; gap: 10px; }
+    .theme-btn, .back-btn { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px 14px; border-radius: 10px; font-size: 0.8rem; cursor: pointer; text-decoration: none; }
     main { max-width: 480px; margin: 0 auto; padding: 24px 18px 60px; }
-    .card { background: var(--bg-card); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; border: 1px solid rgba(255,255,255,0.05); }
+    .card { background: var(--bg-card); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; border: 1px solid var(--border-color); transition: background 0.3s ease, border-color 0.3s ease; }
     .card h3 { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
     label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; margin-top: 14px; }
-    input { width: 100%; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; color: var(--text-primary); font-size: 0.95rem; outline: none; }
+    input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; color: var(--text-primary); font-size: 0.95rem; outline: none; transition: background 0.3s ease, border-color 0.2s ease; }
     input:focus { border-color: var(--accent); }
     input:disabled { opacity: 0.5; }
     button.save-btn { width: 100%; margin-top: 20px; background: var(--accent-gradient); border: none; border-radius: 12px; padding: 13px; color: #fff; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
@@ -42,7 +52,10 @@
 <body>
     <header>
         <div class="brand"><span>FamilyBot-MD</span></div>
-        <a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a>
+        <div class="header-actions">
+            <button class="theme-btn" id="themeBtn"><i class="fas fa-moon"></i></button>
+            <a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a>
+        </div>
     </header>
 
     <main>
@@ -63,6 +76,20 @@
     </main>
 
     <script>
+        const savedTheme = localStorage.getItem('familybot_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        function updateThemeIcon() {
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            document.getElementById('themeBtn').innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        }
+        updateThemeIcon();
+        document.getElementById('themeBtn').addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('familybot_theme', next);
+            updateThemeIcon();
+        });
+
         const apiKey = localStorage.getItem('familybot_key');
         if (!apiKey) window.location.href = '/login';
 
