@@ -1,75 +1,217 @@
 const express = require('express');
 const router = express.Router();
 
+const TIKWM_SEARCH_API = 'https://www.tikwm.com/api/feed/search';
+
+const TIMEOUT = 30000;
+const MAX_RESULTS = 10;
+
 const HEADERS = {
     'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (iPad; U; CPU OS 3_2 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Version/4.0.4 Mobile/7B334b Safari/531.21.10'
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
 };
 
-// GET /api/search/tiktok?apiKey=...&query=...
-router.get('/', async (req, res) => {
-    const { query } = req.query;
+async function fetchWithTimeout(url, options = {}, timeout = TIMEOUT) {
+    const controller = new AbortController();
 
-    if (!query) {
-        return res.status(400).json({ status: false, message: 'Debes proporcionar ?query= con lo que quieres buscar' });
-    }
+    const timer = setTimeout(() => {
+        controller.abort();
+    }, timeout);
 
-    let apiRes;
     try {
-        // Igual que el endpoint de descarga (que sí funciona): POST con body JSON
-        apiRes = await fetch('https://www.tikwm.com/api/feed/search', {
-            method: 'POST',
-            headers: HEADERS,
-            body: JSON.stringify({ keywords: query, count: 10, cursor: 0 })
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
         });
-    } catch (networkErr) {
-        // Esto captura errores de red reales (DNS, timeout, conexión rechazada, etc.)
-        console.error('Error de red al buscar en TikTok:', networkErr.message);
-        return res.status(500).json({ status: false, message: `Error de red al contactar el proveedor: ${networkErr.message}` });
+    } finally {
+        clearTimeout(timer);
     }
+}
 
-    const rawText = await apiRes.text();
-    let data;
+router.get('/', async (req, res) => {
     try {
-        data = JSON.parse(rawText);
-    } catch (parseErr) {
-        // El proveedor respondió algo que no es JSON (por ejemplo una página de error o bloqueo)
-        console.error('Respuesta no-JSON de tikwm:', rawText.slice(0, 300));
+        const query = String(req.query.query || '').trim();
+
+        if (!query) {
+            return res.status(400).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'Debes proporcionar una búsqueda.',
+                example: '/api/search/tiktok?apiKey=familybot-md&query=gatos'
+            });
+        }
+
+        if (query.length < 2) {
+            return res.status(400).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'La búsqueda debe tener al menos 2 caracteres.'
+            });
+        }
+
+        if (query.length > 100) {
+            return res.status(400).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'La búsqueda no puede superar los 100 caracteres.'
+            });
+        }
+
+        const response = await fetchWithTimeout(
+            TIKWM_SEARCH_API,
+            {
+                method: 'POST',
+                headers: HEADERS,
+                body: JSON.stringify({
+                    keywords: query,
+                    count: MAX_RESULTS,
+                    cursor: 0
+                })
+            }
+        );
+
+        const rawText = await response.text();
+
+        let data;
+
+        try {
+            data = JSON.parse(rawText);
+        } catch {
+            console.error(
+                '[TIKTOK SEARCH] Respuesta no JSON:',
+                rawText.slice(0, 300)
+            );
+
+            return res.status(502).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'TikTok Search devolvió una respuesta inválida.'
+            });
+        }
+
+        if (!response.ok) {
+            return res.status(502).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'El servicio de búsqueda de TikTok no está disponible.',
+                httpStatus: response.status
+            });
+        }
+
+        if (
+            data.code !== 0 ||
+            !data.data ||
+            !Array.isArray(data.data.videos)
+        ) {
+            return res.status(404).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message:
+                    data.msg ||
+                    'No se encontraron resultados para esa búsqueda.'
+            });
+        }
+
+        const results = data.data.videos
+            .slice(0, MAX_RESULTS)
+            .map(video => ({
+                id: video.id || null,
+
+                title: video.title || null,
+
+                author: {
+                    id: video.author?.id || null,
+                    uniqueId: video.author?.unique_id || null,
+                    nickname: video.author?.nickname || null
+                },
+
+                duration: video.duration || 0,
+
+                stats: {
+                    plays: video.play_count || 0,
+                    likes: video.digg_count || 0,
+                    comments: video.comment_count || 0,
+                    shares: video.share_count || 0
+                },
+
+                video: {
+                    noWatermark: video.play || null,
+                    watermark: video.wmplay || null,
+                    hd: video.hdplay || null,
+                    cover: video.cover || null
+                }
+            }));
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'No se encontraron resultados.'
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            creator: 'AmilcarGit',
+            bot: 'FamilyBot-MD',
+
+            result: {
+                query,
+                total: results.length,
+                results
+            }
+        });
+
+    } catch (error) {
+        console.error('[TIKTOK SEARCH ERROR]', error);
+
+        if (error.name === 'AbortError') {
+            return res.status(504).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message:
+                    'La búsqueda tardó demasiado. Inténtalo nuevamente.'
+            });
+        }
+
         return res.status(500).json({
             status: false,
-            message: 'El proveedor de búsqueda no devolvió datos válidos (puede estar bloqueando la IP del servidor temporalmente)',
-            raw_preview: rawText.slice(0, 200)
+            creator: 'AmilcarGit',
+            bot: 'FamilyBot-MD',
+            message: 'Error interno al buscar en TikTok.'
         });
     }
-
-    if (data.code !== 0 || !data.data?.videos) {
-        return res.status(404).json({
-            status: false,
-            message: data.msg || 'No se encontraron resultados para esa búsqueda'
-        });
-    }
-
-    const results = data.data.videos.map(v => ({
-        title: v.title,
-        author: v.author?.nickname,
-        duration: v.duration,
-        plays: v.play_count,
-        likes: v.digg_count,
-        no_watermark: v.play,
-        cover: v.cover
-    }));
-
-    res.json({ status: true, creator: 'familybot-md', total: results.length, results });
 });
 
 router.meta = {
     title: 'Buscar en TikTok',
-    description: 'Busca videos por palabra clave',
+
+    description:
+        'Busca vídeos de TikTok por palabra clave',
+
     icon: 'fas fa-magnifying-glass',
+
     fields: [
-        { name: 'query', label: 'Buscar', placeholder: 'Ej: gatitos graciosos' }
+        {
+            name: 'query',
+            label: 'Buscar',
+            type: 'text',
+            placeholder: 'Ej: gatos graciosos'
+        }
     ],
-    resultType: 'raw'
+
+    resultType: 'json',
+
+    resultField: 'result'
 };
 
 module.exports = router;
