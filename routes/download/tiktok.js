@@ -1,79 +1,177 @@
-const express = require('express');
-const router = express.Router();
+const express = require('express')
+const router = express.Router()
 
-// GET /api/download/tiktok?apiKey=...&url=...
+const TIKWM_API = 'https://www.tikwm.com/api/'
+const TIMEOUT = 30000
+
+function isTikTokUrl(value) {
+    try {
+        const url = new URL(value)
+        const host = url.hostname.toLowerCase()
+
+        return (
+            host === 'tiktok.com' ||
+            host.endsWith('.tiktok.com')
+        )
+    } catch {
+        return false
+    }
+}
+
+async function fetchWithTimeout(url, options = {}, timeout = TIMEOUT) {
+    const controller = new AbortController()
+
+    const timer = setTimeout(() => {
+        controller.abort()
+    }, timeout)
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        })
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
 router.get('/', async (req, res) => {
-    const videoURL = req.query.url;
+    const { url } = req.query
 
-    if (!videoURL) {
-        return res.status(400).json({ status: false, message: 'Debes proporcionar ?url= con el link del video de TikTok' });
+    if (!url) {
+        return res.status(400).json({
+            status: false,
+            creator: 'AmilcarGit',
+            bot: 'FamilyBot-MD',
+            message: 'Debes proporcionar una URL de TikTok.',
+            example: '/api/download/tiktok?apiKey=familybot-md&url=https://www.tiktok.com/...'
+        })
+    }
+
+    if (!isTikTokUrl(url)) {
+        return res.status(400).json({
+            status: false,
+            creator: 'AmilcarGit',
+            bot: 'FamilyBot-MD',
+            message: 'La URL proporcionada no parece ser una URL válida de TikTok.'
+        })
     }
 
     try {
-        const apiRes = await fetch('https://www.tikwm.com/api/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (iPad; U; CPU OS 3_2 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Version/4.0.4 Mobile/7B334b Safari/531.21.10'
-            },
-            body: JSON.stringify({ url: videoURL })
-        });
-        const data = await apiRes.json();
+        const response = await fetchWithTimeout(
+            TIKWM_API,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'FamilyBot-MD'
+                },
+                body: new URLSearchParams({
+                    url,
+                    hd: '1'
+                })
+            }
+        )
 
-        if (data.code !== 0 || !data.data) {
-            return res.status(500).json({
+        const text = await response.text()
+
+        let data
+
+        try {
+            data = JSON.parse(text)
+        } catch {
+            return res.status(502).json({
                 status: false,
-                message: data.msg || 'No se pudo procesar ese link de TikTok'
-            });
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'El servicio de TikTok devolvió una respuesta inválida.'
+            })
         }
 
-        const v = data.data;
+        if (!response.ok || data.code !== 0 || !data.data) {
+            return res.status(502).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: data.msg || 'No se pudo obtener el vídeo de TikTok.'
+            })
+        }
 
-        res.json({
+        const video = data.data
+
+        return res.status(200).json({
             status: true,
-            creator: 'familybot-md',
-            data: {
-                title: v.title,
-                duration: v.duration,
-                author: {
-                    username: `@${v.author?.unique_id}`,
-                    nickname: v.author?.nickname,
-                    avatar: v.author?.avatar
-                },
-                stats: {
-                    plays: v.play_count,
-                    likes: v.digg_count,
-                    comments: v.comment_count,
-                    shares: v.share_count
-                },
-                media: {
-                    no_watermark: v.play,
-                    watermark: v.wmplay,
-                    hd: v.hdplay,
-                    music: v.music
-                }
-            }
-        });
+            creator: 'AmilcarGit',
+            bot: 'FamilyBot-MD',
+            result: {
+                id: video.id || null,
+                title: video.title || null,
 
-    } catch (err) {
-        console.error('Error TikTok:', err);
-        res.status(500).json({ status: false, message: 'Error interno al procesar el video' });
+                author: {
+                    id: video.author?.id || null,
+                    uniqueId: video.author?.unique_id || null,
+                    nickname: video.author?.nickname || null
+                },
+
+                video: {
+                    url: video.play || video.wmplay || null,
+                    hd: video.hdplay || video.play || null,
+                    watermark: video.wmplay || null,
+                    cover: video.cover || null
+                },
+
+                music: {
+                    url: video.music || null,
+                    title: video.music_info?.title || null,
+                    author: video.music_info?.author || null
+                },
+
+                stats: {
+                    playCount: video.play_count || 0,
+                    likeCount: video.digg_count || 0,
+                    commentCount: video.comment_count || 0,
+                    shareCount: video.share_count || 0
+                },
+
+                duration: video.duration || 0
+            }
+        })
+
+    } catch (error) {
+        console.error('[TIKTOK ERROR]', error)
+
+        if (error.name === 'AbortError') {
+            return res.status(504).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+                message: 'La solicitud a TikTok tardó demasiado. Inténtalo nuevamente.'
+            })
+        }
+
+        return res.status(500).json({
+            status: false,
+            creator: 'AmilcarGit',
+            bot: 'FamilyBot-MD',
+            message: 'Error interno al procesar el vídeo de TikTok.'
+        })
     }
-});
+})
 
 router.meta = {
-    title: 'Descargar video de TikTok',
-    description: 'Descarga sin marca de agua a partir del link',
+    title: 'TikTok Downloader',
+    description: 'Descarga vídeos de TikTok sin necesidad de una API key externa',
     icon: 'fab fa-tiktok',
     fields: [
-        { name: 'url', label: 'Link de TikTok', placeholder: 'Pega el link del video...' }
+        {
+            name: 'url',
+            label: 'URL de TikTok',
+            type: 'text',
+            placeholder: 'https://www.tiktok.com/@usuario/video/...'
+        }
     ],
-    resultType: 'link',
-    resultField: 'data.media.no_watermark',
-    previewFields: [
-        { label: 'Título', field: 'data.title' },
-        { label: 'Autor', field: 'data.author.nickname' }
-    ]
-};
+    resultType: 'json',
+    resultField: 'result'
+}
 
-module.exports = router;
+module.exports = router
