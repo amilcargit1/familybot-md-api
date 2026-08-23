@@ -28,13 +28,12 @@ const emojis = [
 router.get('/', (req, res) => {
     try {
         const index = Math.floor(Math.random() * emojis.length);
-        const emoji = emojis[index];
 
         res.json({
             status: true,
             creator: 'FamilyBot-MD',
             result: {
-                emoji,
+                emoji: emojis[index],
                 index: index + 1,
                 total: emojis.length
             }
@@ -57,7 +56,7 @@ router.meta = {
     icon: 'fas fa-face-smile',
     fields: [],
     resultType: 'text',
-    resultField: 'emoji'
+    resultField: 'result.emoji'
 };
 
 module.exports = router;
