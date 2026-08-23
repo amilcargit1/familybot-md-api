@@ -112,13 +112,12 @@ const dares = [
 router.get('/', (req, res) => {
     try {
         const index = Math.floor(Math.random() * dares.length);
-        const dare = dares[index];
 
         res.json({
             status: true,
             creator: 'FamilyBot-MD',
             result: {
-                dare,
+                dare: dares[index],
                 number: index + 1,
                 total: dares.length
             }
@@ -141,7 +140,7 @@ router.meta = {
     icon: 'fas fa-bolt',
     fields: [],
     resultType: 'text',
-    resultField: 'dare'
+    resultField: 'result.dare'
 };
 
 module.exports = router;
