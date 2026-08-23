@@ -93,7 +93,9 @@ router.get('/', (req, res) => {
             });
         }
 
-        const result = answers[Math.floor(Math.random() * answers.length)];
+        const result = answers[
+            Math.floor(Math.random() * answers.length)
+        ];
 
         res.json({
             status: true,
