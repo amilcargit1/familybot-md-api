@@ -8,12 +8,12 @@ const choices = {
 };
 
 const aliases = {
-    rock: 'piedra',
-    paper: 'papel',
-    scissors: 'tijera',
     piedra: 'piedra',
     papel: 'papel',
-    tijera: 'tijera'
+    tijera: 'tijera',
+    rock: 'piedra',
+    paper: 'papel',
+    scissors: 'tijera'
 };
 
 function getWinner(player, bot) {
@@ -34,15 +34,22 @@ function getWinner(player, bot) {
 
 router.get('/', (req, res) => {
     try {
-        const input = String(req.query.choice || req.query.opcion || '').toLowerCase().trim();
+        const input = String(
+            req.query.choice ||
+            req.query.opcion ||
+            ''
+        ).toLowerCase().trim();
 
         if (!input) {
             return res.status(400).json({
                 status: false,
                 creator: 'FamilyBot-MD',
                 message: 'Debes indicar una opción.',
-                options: ['piedra', 'papel', 'tijera'],
-                example: '/api/games/rps?apiKey=familybot-md&choice=piedra'
+                options: [
+                    'piedra',
+                    'papel',
+                    'tijera'
+                ]
             });
         }
 
@@ -53,13 +60,30 @@ router.get('/', (req, res) => {
                 status: false,
                 creator: 'FamilyBot-MD',
                 message: 'Opción inválida.',
-                options: ['piedra', 'papel', 'tijera']
+                options: [
+                    'piedra',
+                    'papel',
+                    'tijera'
+                ]
             });
         }
 
         const available = Object.keys(choices);
-        const bot = available[Math.floor(Math.random() * available.length)];
+        const bot = available[
+            Math.floor(Math.random() * available.length)
+        ];
+
         const winner = getWinner(player, bot);
+
+        let message;
+
+        if (winner === 'empate') {
+            message = '🤝 ¡Empate!';
+        } else if (winner === 'jugador') {
+            message = '🎉 ¡Ganaste!';
+        } else {
+            message = '😈 ¡La API ganó!';
+        }
 
         res.json({
             status: true,
@@ -74,12 +98,7 @@ router.get('/', (req, res) => {
                     emoji: choices[bot]
                 },
                 winner,
-                message:
-                    winner === 'empate'
-                        ? '🤝 ¡Empate!'
-                        : winner === 'jugador'
-                            ? '🎉 ¡Ganaste!'
-                            : '😈 ¡La API ganó!'
+                message
             }
         });
 
@@ -103,7 +122,20 @@ router.meta = {
             name: 'choice',
             label: 'Tu elección',
             type: 'select',
-            options: ['piedra', 'papel', 'tijera'],
+            options: [
+                {
+                    value: 'piedra',
+                    label: '🪨 Piedra'
+                },
+                {
+                    value: 'papel',
+                    label: '📄 Papel'
+                },
+                {
+                    value: 'tijera',
+                    label: '✂️ Tijera'
+                }
+            ],
             default: 'piedra'
         }
     ],
