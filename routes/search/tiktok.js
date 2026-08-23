@@ -7,10 +7,6 @@ const TIMEOUT = 30000;
 const DEFAULT_COUNT = 10;
 const MAX_COUNT = 20;
 
-function clean(value) {
-    return typeof value === 'string' ? value.trim() : '';
-}
-
 async function fetchWithTimeout(url, options = {}, timeout = TIMEOUT) {
     const controller = new AbortController();
 
@@ -34,7 +30,6 @@ function normalizeVideo(video) {
     }
 
     const author = video.author || {};
-    const stats = video.stats || {};
 
     return {
         id: video.id || video.aweme_id || null,
@@ -42,39 +37,31 @@ function normalizeVideo(video) {
         title:
             video.title ||
             video.desc ||
-            video.description ||
             null,
 
         author: {
             id: author.id || author.uid || null,
+
             uniqueId:
                 author.unique_id ||
                 author.uniqueId ||
-                author.uniqueId ||
                 null,
+
             nickname:
                 author.nickname ||
                 author.name ||
                 null,
+
             avatar:
                 author.avatar ||
                 author.avatar_thumb ||
-                author.avatarLarger ||
                 null
         },
 
         video: {
-            url:
-                video.play ||
-                video.play_url ||
-                video.video_url ||
-                video.download ||
-                null,
-
             noWatermark:
                 video.play ||
                 video.hdplay ||
-                video.play_url ||
                 null,
 
             hd:
@@ -84,66 +71,58 @@ function normalizeVideo(video) {
 
             watermark:
                 video.wmplay ||
-                video.wm_play ||
                 null,
 
             cover:
                 video.cover ||
                 video.origin_cover ||
-                video.dynamic_cover ||
                 null
         },
 
         music: {
             url:
                 video.music ||
-                video.music_url ||
                 null,
 
             title:
                 video.music_info?.title ||
-                video.music_info?.musicName ||
                 null,
 
             author:
                 video.music_info?.author ||
-                video.music_info?.musicAuthor ||
                 null
         },
 
         duration:
             video.duration ||
-            video.video?.duration ||
             0,
 
         stats: {
             plays:
                 video.play_count ||
-                stats.playCount ||
-                stats.play_count ||
                 0,
 
             likes:
                 video.digg_count ||
-                stats.diggCount ||
-                stats.likeCount ||
                 0,
 
             comments:
                 video.comment_count ||
-                stats.commentCount ||
                 0,
 
             shares:
                 video.share_count ||
-                stats.shareCount ||
                 0
         }
     };
 }
 
 router.get('/', async (req, res) => {
-    const query = clean(req.query.query || req.query.q);
+    const query = String(
+        req.query.query ||
+        req.query.q ||
+        ''
+    ).trim();
 
     let count = parseInt(req.query.count, 10);
 
@@ -151,13 +130,23 @@ router.get('/', async (req, res) => {
         count = DEFAULT_COUNT;
     }
 
-    count = Math.min(Math.max(count, 1), MAX_COUNT);
+    count = Math.min(
+        Math.max(count, 1),
+        MAX_COUNT
+    );
 
-    let cursor = parseInt(req.query.cursor, 10);
+    let cursor = parseInt(
+        req.query.cursor,
+        10
+    );
 
     if (!Number.isFinite(cursor) || cursor < 0) {
         cursor = 0;
     }
+
+    // ─────────────────────────────
+    // VALIDACIÓN
+    // ─────────────────────────────
 
     if (!query) {
         return res.status(400).json({
@@ -166,7 +155,7 @@ router.get('/', async (req, res) => {
             bot: 'FamilyBot-MD',
             message: 'Debes proporcionar una búsqueda.',
             example:
-                '/api/search/tiktok?apiKey=familybot-md&query=anime'
+                '/api/search/tiktok?apiKey=familybot-md&query=gatos'
         });
     }
 
@@ -191,44 +180,87 @@ router.get('/', async (req, res) => {
     }
 
     try {
-        const body = new URLSearchParams();
 
-        body.set('keywords', query);
-        body.set('count', String(count));
-        body.set('cursor', String(cursor));
+        // ─────────────────────────────
+        // TIKWM SEARCH
+        // GET
+        // ─────────────────────────────
+
+        const params = new URLSearchParams({
+            keywords: query,
+            count: String(count),
+            cursor: String(cursor),
+            hd: '1'
+        });
+
+        const url =
+            `${TIKWM_SEARCH_API}?${params.toString()}`;
 
         const response = await fetchWithTimeout(
-            TIKWM_SEARCH_API,
+            url,
             {
-                method: 'POST',
+                method: 'GET',
 
                 headers: {
-                    'Content-Type':
-                        'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Accept':
+                        'application/json, text/plain, */*',
 
-                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language':
+                        'es-ES,es;q=0.9,en;q=0.8',
 
                     'User-Agent':
-                        'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36',
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
 
-                    'Origin': 'https://www.tikwm.com',
-
-                    'Referer': 'https://www.tikwm.com/'
-                },
-
-                body: body.toString()
+                    'Referer':
+                        'https://www.tikwm.com/'
+                }
             }
         );
 
-        const text = await response.text();
+        const contentType =
+            response.headers.get('content-type') || '';
 
-        let data = null;
+        const text =
+            await response.text();
+
+        // ─────────────────────────────
+        // CLOUDFLARE / HTML
+        // ─────────────────────────────
+
+        if (
+            !contentType.includes('application/json') ||
+            text.trim().startsWith('<!DOCTYPE') ||
+            text.trim().startsWith('<html')
+        ) {
+
+            console.error(
+                '[TIKTOK SEARCH] TikWM devolvió HTML:',
+                text.substring(0, 300)
+            );
+
+            return res.status(502).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+
+                message:
+                    'TikTok Search está protegido temporalmente por Cloudflare.',
+
+                result: {
+                    query,
+                    results: []
+                }
+            });
+        }
+
+        let data;
 
         try {
             data = JSON.parse(text);
-        } catch (jsonError) {
+        } catch (error) {
+
             console.error(
-                '[TIKTOK SEARCH] Respuesta no JSON:',
+                '[TIKTOK SEARCH] JSON inválido:',
                 text.substring(0, 500)
             );
 
@@ -236,42 +268,69 @@ router.get('/', async (req, res) => {
                 status: false,
                 creator: 'AmilcarGit',
                 bot: 'FamilyBot-MD',
+
                 message:
-                    'TikTok Search devolvió una respuesta no válida.',
-                upstream: {
-                    status: response.status,
-                    contentType:
-                        response.headers.get('content-type') || null
-                }
+                    'TikTok Search devolvió un JSON inválido.'
             });
         }
+
+        // ─────────────────────────────
+        // ERROR DE TIKWM
+        // ─────────────────────────────
 
         if (!response.ok) {
             return res.status(502).json({
                 status: false,
                 creator: 'AmilcarGit',
                 bot: 'FamilyBot-MD',
+
                 message:
                     data?.msg ||
-                    'TikTok Search no está disponible actualmente.',
-                upstreamStatus: response.status
+                    'TikTok Search no está disponible.',
+
+                upstreamStatus:
+                    response.status
             });
         }
 
-        /*
-         * TikWM puede cambiar ligeramente la estructura.
-         * Buscamos los vídeos en varias ubicaciones posibles.
-         */
+        if (
+            data.code !== undefined &&
+            data.code !== 0
+        ) {
+            return res.status(502).json({
+                status: false,
+                creator: 'AmilcarGit',
+                bot: 'FamilyBot-MD',
+
+                message:
+                    data.msg ||
+                    'TikWM no pudo realizar la búsqueda.'
+            });
+        }
+
+        // ─────────────────────────────
+        // OBTENER RESULTADOS
+        // ─────────────────────────────
 
         let videos = [];
 
-        if (Array.isArray(data?.data?.videos)) {
+        if (
+            Array.isArray(
+                data?.data?.videos
+            )
+        ) {
             videos = data.data.videos;
-        } else if (Array.isArray(data?.data?.video)) {
-            videos = data.data.video;
-        } else if (Array.isArray(data?.videos)) {
+        }
+
+        else if (
+            Array.isArray(data?.videos)
+        ) {
             videos = data.videos;
-        } else if (Array.isArray(data?.data)) {
+        }
+
+        else if (
+            Array.isArray(data?.data)
+        ) {
             videos = data.data;
         }
 
@@ -280,14 +339,19 @@ router.get('/', async (req, res) => {
             .filter(Boolean)
             .slice(0, count);
 
-        if (!results.length) {
+        // ─────────────────────────────
+        // SIN RESULTADOS
+        // ─────────────────────────────
+
+        if (results.length === 0) {
             return res.status(404).json({
                 status: false,
                 creator: 'AmilcarGit',
                 bot: 'FamilyBot-MD',
+
                 message:
                     data?.msg ||
-                    'No se encontraron vídeos para esa búsqueda.',
+                    'No se encontraron vídeos.',
 
                 result: {
                     query,
@@ -297,6 +361,10 @@ router.get('/', async (req, res) => {
             });
         }
 
+        // ─────────────────────────────
+        // RESPUESTA FINAL
+        // ─────────────────────────────
+
         return res.status(200).json({
             status: true,
             creator: 'AmilcarGit',
@@ -304,25 +372,31 @@ router.get('/', async (req, res) => {
 
             result: {
                 query,
+                total: results.length,
                 count: results.length,
                 cursor,
+
                 results
             }
         });
 
     } catch (error) {
+
         console.error(
             '[TIKTOK SEARCH ERROR]',
             error
         );
 
-        if (error.name === 'AbortError') {
+        if (
+            error.name === 'AbortError'
+        ) {
             return res.status(504).json({
                 status: false,
                 creator: 'AmilcarGit',
                 bot: 'FamilyBot-MD',
+
                 message:
-                    'La búsqueda de TikTok tardó demasiado. Inténtalo nuevamente.'
+                    'La búsqueda tardó demasiado. Inténtalo nuevamente.'
             });
         }
 
@@ -330,12 +404,19 @@ router.get('/', async (req, res) => {
             status: false,
             creator: 'AmilcarGit',
             bot: 'FamilyBot-MD',
+
             message:
                 'Error interno al buscar en TikTok.',
-            error: error.message
+
+            error:
+                error.message
         });
     }
 });
+
+// ─────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────
 
 router.meta = {
     title: 'Buscar en TikTok',
@@ -350,7 +431,7 @@ router.meta = {
             name: 'query',
             label: 'Buscar',
             type: 'text',
-            placeholder: 'Ej: edits'
+            placeholder: 'Ej: gatos'
         },
 
         {
