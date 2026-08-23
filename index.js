@@ -32,6 +32,12 @@ app.use((req, res) => {
     res.status(404).send('<h1 style="font-family:sans-serif;color:#fff;background:#0a0b0e;padding:40px">Esta página todavía no existe. <a href="/" style="color:#ec4899">Volver al inicio</a></h1>');
 });
 
+// ---- Manejador de errores (para que un error de Redis, DB, etc. no tumbe todo el servidor) ----
+app.use((err, req, res, next) => {
+    console.error('Error no controlado:', err);
+    res.status(500).json({ status: false, message: err.message || 'Error interno del servidor' });
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 FamilyBot-MD API escuchando en el puerto ${PORT}`);
 });
