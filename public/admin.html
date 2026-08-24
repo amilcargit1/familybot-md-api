@@ -301,13 +301,25 @@
                 return;
             }
             body.innerHTML = allCodes.map(c => `
-                <div class="user-row" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="user-row" style="grid-template-columns: 1fr 1fr 1fr auto;">
                     <div class="user-cell"><strong>${c.code}</strong><span>${c.active ? 'Activo' : 'Agotado'}</span></div>
                     <div>+${c.requests} solicitudes</div>
                     <div>${c.uses} / ${c.maxUses} usos</div>
+                    <div><button class="mgmt-btn danger" onclick="deleteCode('${c.code}')">🗑</button></div>
                 </div>
             `).join('');
         }
+
+        async function deleteCode(code) {
+            if (!confirm(`¿Eliminar el código ${code}? Esta acción no se puede deshacer.`)) return;
+            await fetch('/api/auth/admin/delete-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminKey: apiKey, code })
+            });
+            loadAdminData();
+        }
+        window.deleteCode = deleteCode;
 
         async function promoteUser(email) {
             await fetch('/api/auth/admin/set-role', {
