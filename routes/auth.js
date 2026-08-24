@@ -220,4 +220,22 @@ router.post('/admin/delete', async (req, res) => {
     res.json({ status: true, message: 'Usuario eliminado' });
 });
 
+// ============== ADMIN: ELIMINAR CÓDIGO ==============
+router.post('/admin/delete-code', async (req, res) => {
+    const { adminKey, code } = req.body;
+    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+    if (!code) return res.status(400).json({ status: false, message: 'Falta el código' });
+
+    const normalized = code.trim().toUpperCase();
+    const codes = await db.getCodes();
+    const filtered = codes.filter(c => c.code !== normalized);
+
+    if (filtered.length === codes.length) {
+        return res.status(404).json({ status: false, message: 'Código no encontrado' });
+    }
+
+    await db.saveCodes(filtered);
+    res.json({ status: true, message: 'Código eliminado' });
+});
+
 module.exports = router;
