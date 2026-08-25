@@ -14,6 +14,27 @@ if (!ADMIN.username || !ADMIN.email || !ADMIN.password || !ADMIN.key) {
     throw new Error('Las credenciales del administrador no están configuradas');
 }
 
+function getBearerToken(req) {
+    const authorization = req.get('authorization');
+    if (!authorization) return null;
+
+    const [scheme, token] = authorization.split(' ');
+    if (scheme !== 'Bearer' || !token) return null;
+
+    return token;
+}
+
+function requireAdmin(req, res, next) {
+    const token = getBearerToken(req);
+
+    if (!token || token !== ADMIN.key) {
+        return res.status(403).json({ status: false, message: 'No autorizado' });
+    }
+
+    req.user = { role: 'admin', plan: 'ADMIN VIP' };
+    next();
+}
+
 router.post('/register', async (req, res) => {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -142,10 +163,9 @@ router.post('/redeem', async (req, res) => {
     });
 });
 
-router.post('/admin/create-code', async (req, res) => {
-    const { adminKey, code, requests, maxUses } = req.body;
+router.post('/admin/create-code', requireAdmin, async (req, res) => {
+    const { code, requests, maxUses } = req.body;
 
-    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
     if (!code || !requests || !maxUses) return res.status(400).json({ status: false, message: 'Faltan datos' });
 
     const normalized = code.trim().toUpperCase();
@@ -168,10 +188,7 @@ router.post('/admin/create-code', async (req, res) => {
     res.json({ status: true, message: 'Código creado', code: normalized });
 });
 
-router.get('/admin/all', async (req, res) => {
-    const { apiKey } = req.query;
-    if (apiKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
-
+router.get('/admin/all', requireAdmin, async (req, res) => {
     const allUsers = await db.getUsers();
     const users = allUsers.map(({ password, ...safe }) => safe);
     const codes = await db.getCodes();
@@ -185,9 +202,8 @@ router.get('/admin/all', async (req, res) => {
     });
 });
 
-router.post('/admin/set-role', async (req, res) => {
-    const { adminKey, email, plan, limit } = req.body;
-    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+router.post('/admin/set-role', requireAdmin, async (req, res) => {
+    const { email, plan, limit } = req.body;
 
     const user = await db.findUser('email', email);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
@@ -200,9 +216,8 @@ router.post('/admin/set-role', async (req, res) => {
     res.json({ status: true, message: 'Usuario actualizado' });
 });
 
-router.post('/admin/delete', async (req, res) => {
-    const { adminKey, email } = req.body;
-    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+router.post('/admin/delete', requireAdmin, async (req, res) => {
+    const { email } = req.body;
 
     const allUsers = await db.getUsers();
     const users = allUsers.filter(u => u.email !== email);
@@ -210,9 +225,8 @@ router.post('/admin/delete', async (req, res) => {
     res.json({ status: true, message: 'Usuario eliminado' });
 });
 
-router.post('/admin/delete-code', async (req, res) => {
-    const { adminKey, code } = req.body;
-    if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
+router.post('/admin/delete-code', requireAdmin, async (req, res) => {
+    const { code } = req.body;
     if (!code) return res.status(400).json({ status: false, message: 'Falta el código' });
 
     const normalized = code.trim().toUpperCase();
