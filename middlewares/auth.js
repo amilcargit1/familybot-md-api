@@ -1,8 +1,11 @@
 const db = require('../db');
 
-const ADMIN_KEY = process.env.ADMIN_KEY || 'familybot-md';
+const ADMIN_KEY = process.env.ADMIN_KEY;
 
-// Middleware que valida la apiKey, cuenta la solicitud y controla el límite diario
+if (!ADMIN_KEY) {
+    throw new Error('ADMIN_KEY no está configurada');
+}
+
 async function authHandler(req, res, next) {
     const { apiKey } = req.query;
 
