@@ -6,209 +6,30 @@
 <title>FamilyBot-MD · Registro</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <style>
-    :root {
-        --bg-primary: #0a0b0e;
-        --bg-card: #14161c;
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --accent: #ec4899;
-        --accent-purple: #a855f7;
-        --accent-gradient: linear-gradient(135deg, #ec4899, #a855f7);
-        --border-color: rgba(255,255,255,0.07);
-        --radius: 20px;
-    }
-    :root[data-theme="light"] {
-        --bg-primary: #f3f4f8;
-        --bg-card: #ffffff;
-        --text-primary: #1a1d29;
-        --text-secondary: #64748b;
-        --border-color: rgba(15,23,42,0.08);
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-        transition: background 0.3s ease, color 0.3s ease;
-    }
-    .theme-toggle {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        width: 40px; height: 40px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        border-radius: 12px;
-        cursor: pointer;
-        font-size: 1rem;
-    }
-    .card {
-        background: var(--bg-card);
-        border-radius: var(--radius);
-        padding: 32px 28px;
-        width: 100%;
-        max-width: 400px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        border: 1px solid var(--border-color);
-        transition: background 0.3s ease, border-color 0.3s ease;
-    }
-    .brand {
-        text-align: center;
-        font-weight: 800;
-        font-size: 1.4rem;
-        margin-bottom: 6px;
-    }
-    .brand span {
-        background: var(--accent-gradient);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    .subtitle {
-        text-align: center;
-        color: var(--text-secondary);
-        font-size: 0.85rem;
-        margin-bottom: 28px;
-    }
-    label {
-        display: block;
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        margin-bottom: 6px;
-        margin-top: 16px;
-    }
-    input {
-        width: 100%;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 12px 14px;
-        color: var(--text-primary);
-        font-size: 0.95rem;
-        outline: none;
-        transition: background 0.3s ease, border-color 0.2s ease;
-    }
-    input:focus { border-color: var(--accent); }
-    button {
-        width: 100%;
-        margin-top: 26px;
-        background: var(--accent-gradient);
-        border: none;
-        border-radius: 12px;
-        padding: 14px;
-        color: #fff;
-        font-weight: 700;
-        font-size: 0.95rem;
-        cursor: pointer;
-    }
-    button:disabled { opacity: 0.6; }
-    .msg {
-        margin-top: 16px;
-        font-size: 0.85rem;
-        text-align: center;
-        min-height: 20px;
-    }
-    .msg.error { color: #ef4444; }
-    .msg.success { color: #22c55e; }
-    .footer-link {
-        text-align: center;
-        margin-top: 22px;
-        font-size: 0.85rem;
-        color: var(--text-secondary);
-    }
-    .footer-link a { color: var(--accent); text-decoration: none; font-weight: 600; }
+:root{--bg-primary:#0a0b0e;--bg-card:#14161c;--text-primary:#f1f5f9;--text-secondary:#94a3b8;--accent:#ec4899;--accent-purple:#a855f7;--accent-gradient:linear-gradient(135deg,#ec4899,#a855f7);--border-color:rgba(255,255,255,.07);--radius:20px}
+:root[data-theme="light"]{--bg-primary:#f3f4f8;--bg-card:#fff;--text-primary:#1a1d29;--text-secondary:#64748b;--border-color:rgba(15,23,42,.08)}
+*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;transition:background .3s ease,color .3s ease}.theme-toggle{position:fixed;top:20px;right:20px;width:40px;height:40px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary);border-radius:12px;cursor:pointer;font-size:1rem}.card{background:var(--bg-card);border-radius:var(--radius);padding:32px 28px;width:100%;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,.2);border:1px solid var(--border-color)}.brand{text-align:center;font-weight:800;font-size:1.4rem;margin-bottom:6px}.brand span{background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}.subtitle{text-align:center;color:var(--text-secondary);font-size:.85rem;margin-bottom:28px}label{display:block;font-size:.8rem;color:var(--text-secondary);margin-bottom:6px;margin-top:16px}input{width:100%;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;color:var(--text-primary);font-size:.95rem;outline:none}input:focus{border-color:var(--accent)}button{width:100%;margin-top:26px;background:var(--accent-gradient);border:none;border-radius:12px;padding:14px;color:#fff;font-weight:700;font-size:.95rem;cursor:pointer}button:disabled{opacity:.6}.msg{margin-top:16px;font-size:.85rem;text-align:center;min-height:20px}.msg.error{color:#ef4444}.msg.success{color:#22c55e}.key-card{display:none;margin-top:18px;padding:16px;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-primary)}.key-title{font-size:.8rem;color:var(--text-secondary);margin-bottom:8px}.key-value{word-break:break-all;font-family:monospace;font-size:.8rem;line-height:1.5}.copy-btn{margin-top:12px;padding:10px;font-size:.8rem}.footer-link{text-align:center;margin-top:22px;font-size:.85rem;color:var(--text-secondary)}.footer-link a{color:var(--accent);text-decoration:none;font-weight:600}
 </style>
 </head>
 <body>
-    <button class="theme-toggle" id="themeBtn"><i class="fas fa-moon"></i></button>
-    <div class="card">
-        <div class="brand"><span>FamilyBot-MD</span></div>
-        <div class="subtitle">Crea tu cuenta y obtén tu API Key</div>
-
-        <form id="registerForm">
-            <label>Usuario</label>
-            <input type="text" id="username" required placeholder="tu_usuario">
-
-            <label>Correo</label>
-            <input type="email" id="email" required placeholder="tu@correo.com">
-
-            <label>Contraseña</label>
-            <input type="password" id="password" required placeholder="••••••••" minlength="6">
-
-            <button type="submit" id="submitBtn">Crear cuenta</button>
-            <div class="msg" id="msg"></div>
-        </form>
-
-        <div class="footer-link">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></div>
-    </div>
-
-    <script>
-        const savedTheme = localStorage.getItem('familybot_theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        function updateThemeIcon() {
-            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-            document.getElementById('themeBtn').innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-        }
-        updateThemeIcon();
-        document.getElementById('themeBtn').addEventListener('click', () => {
-            const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('familybot_theme', next);
-            updateThemeIcon();
-        });
-
-        const form = document.getElementById('registerForm');
-        const msg = document.getElementById('msg');
-        const btn = document.getElementById('submitBtn');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            btn.disabled = true;
-            btn.innerText = 'Creando cuenta...';
-            msg.className = 'msg';
-            msg.innerText = '';
-
-            const username = document.getElementById('username').value.trim();
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-
-            try {
-                const res = await fetch('/api/auth/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password })
-                });
-                const data = await res.json();
-
-                if (!data.status) {
-                    msg.classList.add('error');
-                    msg.innerText = data.message || 'Ocurrió un error al registrarte';
-                    btn.disabled = false;
-                    btn.innerText = 'Crear cuenta';
-                    return;
-                }
-
-                // Guardamos sesión local y pasamos directo al dashboard
-                localStorage.setItem('familybot_key', data.key);
-                localStorage.setItem('familybot_username', username);
-                localStorage.setItem('familybot_role', 'user');
-                msg.classList.add('success');
-                msg.innerText = '¡Cuenta creada! Entrando...';
-                setTimeout(() => { window.location.href = '/dash'; }, 800);
-
-            } catch (err) {
-                msg.classList.add('error');
-                msg.innerText = 'No se pudo conectar con el servidor';
-                btn.disabled = false;
-                btn.innerText = 'Crear cuenta';
-            }
-        });
-    </script>
+<button class="theme-toggle" id="themeBtn"><i class="fas fa-moon"></i></button>
+<div class="card">
+<div class="brand"><span>FamilyBot-MD</span></div>
+<div class="subtitle">Crea tu cuenta y obtén tu API Key</div>
+<form id="registerForm">
+<label>Usuario</label><input type="text" id="username" required placeholder="tu_usuario" maxlength="30">
+<label>Correo</label><input type="email" id="email" required placeholder="tu@correo.com" maxlength="150">
+<label>Contraseña</label><input type="password" id="password" required placeholder="••••••••" minlength="8" maxlength="128">
+<button type="submit" id="submitBtn">Crear cuenta</button>
+<div class="msg" id="msg"></div>
+</form>
+<div class="key-card" id="keyCard"><div class="key-title">Tu API Key</div><div class="key-value" id="keyValue"></div><button class="copy-btn" id="copyBtn" type="button">Copiar API Key</button></div>
+<div class="footer-link">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></div>
+</div>
+<script>
+const savedTheme=localStorage.getItem('familybot_theme')||'dark';document.documentElement.setAttribute('data-theme',savedTheme);function updateThemeIcon(){const isLight=document.documentElement.getAttribute('data-theme')==='light';document.getElementById('themeBtn').innerHTML=isLight?'<i class="fas fa-sun"></i>':'<i class="fas fa-moon"></i>'}updateThemeIcon();document.getElementById('themeBtn').addEventListener('click',()=>{const next=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',next);localStorage.setItem('familybot_theme',next);updateThemeIcon()});
+const form=document.getElementById('registerForm'),msg=document.getElementById('msg'),btn=document.getElementById('submitBtn'),keyCard=document.getElementById('keyCard'),keyValue=document.getElementById('keyValue'),copyBtn=document.getElementById('copyBtn');
+form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;btn.innerText='Creando cuenta...';msg.className='msg';msg.innerText='';const username=document.getElementById('username').value.trim(),email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;try{const res=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,email,password})});const data=await res.json();if(!data.status){msg.classList.add('error');msg.innerText=data.message||'Ocurrió un error al registrarte';btn.disabled=false;btn.innerText='Crear cuenta';return}const key=data.data&&data.data.key;if(!key){msg.classList.add('error');msg.innerText='La cuenta fue creada, pero no se recibió la API Key';btn.disabled=false;btn.innerText='Crear cuenta';return}localStorage.setItem('familybot_key',key);localStorage.setItem('familybot_username',username);localStorage.setItem('familybot_role','user');keyValue.innerText=key;keyCard.style.display='block';msg.classList.add('success');msg.innerText='¡Cuenta creada correctamente! Guarda tu API Key.';btn.innerText='Cuenta creada';copyBtn.onclick=async()=>{await navigator.clipboard.writeText(key);copyBtn.innerText='API Key copiada';setTimeout(()=>copyBtn.innerText='Copiar API Key',1600)};}catch(err){msg.classList.add('error');msg.innerText='No se pudo conectar con el servidor';btn.disabled=false;btn.innerText='Crear cuenta'}});
+</script>
 </body>
 </html>
