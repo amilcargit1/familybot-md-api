@@ -31,7 +31,6 @@ router.post('/login', async (req, res) => {
         return res.status(400).json({ status: false, message: 'Faltan datos: email, password' });
     }
 
-    // Login del administrador (comparación segura contra timing attacks)
     if (safeCompare(email, ADMIN.email) && safeCompare(password, ADMIN.password)) {
         return res.json({
             status: true,
@@ -55,7 +54,7 @@ router.post('/login', async (req, res) => {
     });
 });
 
-// ============== MI PERFIL (usado por el dashboard para mostrar solicitudes) ==============
+// ============== MI PERFIL ==============
 router.get('/me', async (req, res) => {
     const { apiKey } = req.query;
     if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
@@ -82,7 +81,7 @@ router.get('/me', async (req, res) => {
     });
 });
 
-// ============== ACTUALIZAR PERFIL (username / password) ==============
+// ============== ACTUALIZAR PERFIL ==============
 router.post('/update-profile', async (req, res) => {
     const { apiKey, username, password } = req.body;
     if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
@@ -102,9 +101,49 @@ router.post('/update-profile', async (req, res) => {
     res.json({ status: true, message: 'Perfil actualizado correctamente' });
 });
 
-// ============== ESTADÍSTICAS GLOBALES (para la portada) ==============
+// ============== ESTADÍSTICAS GLOBALES ==============
+// Público para la portada. Las métricas sensibles no se exponen aquí.
 router.get('/stats', async (req, res) => {
-    res.json({ status: true, users: await db.countUsers(), endpoints: 9 });
+    try {
+        const [users, stats] = await Promise.all([
+            db.countUsers(),
+            db.getStats({ days: 7 })
+        ]);
+
+        const endpointRequests = Object.entries(stats.endpointRequests)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([endpoint, requests]) => ({ endpoint, requests }));
+
+        const avgResponseTimeMs = stats.totalRequests > 0
+            ? Math.round(stats.totalResponseTimeMs / stats.totalRequests)
+            : 0;
+
+        const successRate = stats.totalRequests > 0
+            ? Number(((stats.successfulRequests / stats.totalRequests) * 100).toFixed(2))
+            : 100;
+
+        res.json({
+            status: true,
+            users,
+            endpoints: Array.isArray(req.app.locals.apiEndpoints)
+                ? req.app.locals.apiEndpoints.length
+                : 0,
+            requests: {
+                total: stats.totalRequests,
+                successful: stats.successfulRequests,
+                failed: stats.failedRequests,
+                successRate,
+                averageResponseTimeMs: avgResponseTimeMs
+            },
+            topEndpoints: endpointRequests,
+            daily: stats.daily,
+            storage: db.isPersistent ? 'redis' : 'local'
+        });
+    } catch (err) {
+        console.error('Error obteniendo estadísticas:', err);
+        res.status(500).json({ status: false, message: 'No se pudieron obtener las estadísticas' });
+    }
 });
 
 // ============== CANJEAR CÓDIGO ==============
@@ -134,11 +173,7 @@ router.post('/redeem', async (req, res) => {
     if (found.uses >= found.maxUses) found.active = false;
     await db.saveCodes(codes);
 
-    res.json({
-        status: true,
-        message: `¡Código canjeado! +${found.requests} solicitudes agregadas`,
-        new_limit: newLimit
-    });
+    res.json({ status: true, message: `¡Código canjeado! +${found.requests} solicitudes agregadas`, new_limit: newLimit });
 });
 
 // ============== OLVIDÉ MI CONTRASEÑA ==============
@@ -147,25 +182,21 @@ router.post('/forgot-password', async (req, res) => {
     if (!email) return res.status(400).json({ status: false, message: 'Falta el correo' });
 
     const user = await db.findUser('email', email);
-    // Por seguridad respondemos igual exista o no el correo (no revelamos si existe una cuenta con ese email)
-    if (!user) {
-        return res.json({ status: true, message: 'Si ese correo tiene una cuenta, se envió un link de recuperación.' });
-    }
+    if (!user) return res.json({ status: true, message: 'Si ese correo tiene una cuenta, se envió un link de recuperación.' });
 
     const token = crypto.randomBytes(24).toString('hex');
-    const expires = Date.now() + 15 * 60 * 1000; // el link vale por 15 minutos
+    const expires = Date.now() + 15 * 60 * 1000;
     await db.updateUserBy('id', user.id, { resetToken: token, resetExpires: expires });
 
     const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
     let emailSent = false;
 
-    // Envío real por correo (opcional): regístrate gratis en https://resend.com
     if (RESEND_API_KEY) {
         try {
             const emailRes = await fetch('https://api.resend.com/emails', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     from: process.env.RESEND_FROM || 'FamilyBot-MD <onboarding@resend.dev>',
                     to: email,
@@ -181,10 +212,7 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({
         status: true,
-        message: emailSent
-            ? 'Te enviamos un correo con el link de recuperación.'
-            : 'No se pudo enviar el correo automático (o no está configurado). Usa este link directo:',
-        // Solo mandamos el link directo en la respuesta si NO se pudo enviar por correo
+        message: emailSent ? 'Te enviamos un correo con el link de recuperación.' : 'No se pudo enviar el correo automático (o no está configurado). Usa este link directo:',
         reset_link: emailSent ? undefined : resetUrl
     });
 });
@@ -209,7 +237,7 @@ router.post('/reset-password', async (req, res) => {
     res.json({ status: true, message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
 });
 
-// ============== TOP 5 USUARIOS (leaderboard) ==============
+// ============== TOP 5 USUARIOS ==============
 router.get('/leaderboard', async (req, res) => {
     const users = await db.getUsers();
     const top = users
@@ -228,9 +256,7 @@ router.post('/admin/create-code', requireAdmin, async (req, res) => {
 
     const normalized = code.trim().toUpperCase();
     const codes = await db.getCodes();
-    if (codes.find(c => c.code === normalized)) {
-        return res.status(400).json({ status: false, message: 'Ese código ya existe' });
-    }
+    if (codes.find(c => c.code === normalized)) return res.status(400).json({ status: false, message: 'Ese código ya existe' });
 
     codes.push({
         code: normalized,
@@ -252,19 +278,12 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
     const users = allUsers.map(({ password, resetToken, ...safe }) => safe);
     const codes = await db.getCodes();
 
-    res.json({
-        status: true,
-        totalUsers: users.length,
-        totalCodes: codes.filter(c => c.active).length,
-        users,
-        codes
-    });
+    res.json({ status: true, totalUsers: users.length, totalCodes: codes.filter(c => c.active).length, users, codes });
 });
 
-// ============== ADMIN: CAMBIAR PLAN/ROL DE UN USUARIO ==============
+// ============== ADMIN: CAMBIAR PLAN/ROL ==============
 router.post('/admin/set-role', requireAdmin, async (req, res) => {
     const { email, plan, limit } = req.body;
-
     const user = await db.findUser('email', email);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
@@ -279,7 +298,6 @@ router.post('/admin/set-role', requireAdmin, async (req, res) => {
 // ============== ADMIN: ELIMINAR USUARIO ==============
 router.post('/admin/delete', requireAdmin, async (req, res) => {
     const { email } = req.body;
-
     const allUsers = await db.getUsers();
     const users = allUsers.filter(u => u.email !== email);
     await db.saveUsers(users);
@@ -295,9 +313,7 @@ router.post('/admin/delete-code', requireAdmin, async (req, res) => {
     const codes = await db.getCodes();
     const filtered = codes.filter(c => c.code !== normalized);
 
-    if (filtered.length === codes.length) {
-        return res.status(404).json({ status: false, message: 'Código no encontrado' });
-    }
+    if (filtered.length === codes.length) return res.status(404).json({ status: false, message: 'Código no encontrado' });
 
     await db.saveCodes(filtered);
     res.json({ status: true, message: 'Código eliminado' });
