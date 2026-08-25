@@ -1,12 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
-// ============== ALMACENAMIENTO: Redis (Upstash) opcional, o JSON local ==============
-// Si configuras UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN en las
-// variables de entorno, los datos se guardan en Upstash (persisten para
-// siempre, sobreviven a los redeploys). Si no los configuras, todo sigue
-// funcionando igual que antes con archivos JSON locales (pero esos se
-// pierden en cada redeploy en Render Free).
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const USE_REDIS = Boolean(UPSTASH_URL && UPSTASH_TOKEN);
@@ -24,11 +19,7 @@ async function redisCommand(command) {
         body: JSON.stringify(command)
     });
     const data = await res.json();
-    if (data.error) {
-        // No lanzamos el error (podría tumbar una solicitud sin try/catch);
-        // lo dejamos bien visible en los logs de Render para poder diagnosticarlo.
-        console.error(`❌ Error de Upstash Redis en comando [${command[0]}]:`, data.error);
-    }
+    if (data.error) console.error(`❌ Error de Upstash Redis en comando [${command[0]}]:`, data.error);
     return data.result;
 }
 
@@ -59,15 +50,9 @@ async function saveCollection(name, data) {
 }
 
 function generateKey() {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = 'FamilyBot-MD';
-    for (let i = 0; i < 10; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    return `FamilyBot-MD-${crypto.randomBytes(24).toString('hex')}`;
 }
 
-// ============== USUARIOS ==============
 async function getUsers() {
     return getCollection('users');
 }
@@ -81,16 +66,16 @@ async function findUser(field, value) {
     return users.find(u => u[field] === value) || null;
 }
 
-async function createUser({ username, email, password }) {
+async function createUser({ username, email, password, key, limit = 100 }) {
     const users = await getUsers();
     const newUser = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         username,
         email,
         password,
-        key: generateKey(),
+        key: key || generateKey(),
         plan: 'free',
-        limit: 100,
+        limit,
         requestToday: 0,
         totalRequest: 0,
         lastRequestDate: new Date().toISOString().split('T')[0],
@@ -101,7 +86,6 @@ async function createUser({ username, email, password }) {
     return newUser;
 }
 
-// Actualiza un usuario por id (u otro campo)
 async function updateUserBy(field, value, newData) {
     const users = await getUsers();
     const index = users.findIndex(u => u[field] === value);
@@ -111,7 +95,6 @@ async function updateUserBy(field, value, newData) {
     return users[index];
 }
 
-// Suma una solicitud al usuario (contador diario + total)
 async function registerRequest(user) {
     const today = new Date().toISOString().split('T')[0];
     const requestToday = user.lastRequestDate === today ? (user.requestToday || 0) + 1 : 1;
@@ -127,7 +110,6 @@ async function countUsers() {
     return users.length;
 }
 
-// ============== CÓDIGOS DE CANJE ==============
 async function getCodes() {
     return getCollection('codes');
 }
