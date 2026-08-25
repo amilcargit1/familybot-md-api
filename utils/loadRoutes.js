@@ -11,6 +11,17 @@ const CATEGORY_LABELS = {
 
 const ENDPOINT_TYPES = new Set(['api', 'download', 'search', 'media', 'utility', 'auth', 'admin', 'custom']);
 
+const TYPE_META = {
+    api: { label: 'API', icon: 'fas fa-plug', resultType: 'raw' },
+    download: { label: 'Descarga', icon: 'fas fa-download', resultType: 'link' },
+    search: { label: 'Búsqueda', icon: 'fas fa-magnifying-glass', resultType: 'text' },
+    media: { label: 'Media', icon: 'fas fa-photo-film', resultType: 'image' },
+    utility: { label: 'Utilidad', icon: 'fas fa-toolbox', resultType: 'raw' },
+    auth: { label: 'Auth', icon: 'fas fa-key', resultType: 'raw' },
+    admin: { label: 'Admin', icon: 'fas fa-shield-halved', resultType: 'raw' },
+    custom: { label: 'Personalizado', icon: 'fas fa-code', resultType: 'raw' }
+};
+
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -61,19 +72,26 @@ function loadRoutes(app, authHandler) {
                 const category = segments[0];
                 const meta = router.meta || {};
                 const type = normalizeType(meta, category, name);
+                const typeMeta = TYPE_META[type];
 
                 endpoints.push({
                     category,
                     categoryLabel: CATEGORY_LABELS[category] || capitalize(category),
                     type,
+                    typeLabel: typeMeta.label,
                     path: routePath,
                     title: meta.title || capitalize(name),
                     description: meta.description || '',
-                    icon: meta.icon || 'fas fa-plug',
+                    icon: meta.icon || typeMeta.icon,
                     fields: meta.fields || [],
-                    resultType: meta.resultType || 'raw',
+                    resultType: meta.resultType || typeMeta.resultType,
                     resultField: meta.resultField || null,
-                    previewFields: meta.previewFields || []
+                    previewFields: meta.previewFields || [],
+                    ui: {
+                        mode: type,
+                        label: typeMeta.label,
+                        icon: typeMeta.icon
+                    }
                 });
             }
         });
