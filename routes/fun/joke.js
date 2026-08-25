@@ -75,7 +75,8 @@ router.meta = {
     icon: 'fas fa-face-laugh',
     fields: [],
     resultType: 'text',
-    resultField: 'joke'
+    resultField: 'joke',
+    example: { status: true, creator: 'FamilyBot-MD', type: 'joke', joke: '¿Qué hace una abeja en el gimnasio? ¡Zum-ba!' }
 };
 
 module.exports = router
