@@ -45,7 +45,8 @@ router.meta = {
     ],
     resultType: 'text',
     resultField: 'data.translated',
-    previewFields: [{ label: 'Detectado', field: 'data.from' }]
+    previewFields: [{ label: 'Detectado', field: 'data.from' }],
+    example: { status: true, creator: 'familybot-md', data: { original: 'hola', translated: 'hello', from: 'es', to: 'en' } }
 };
 
 module.exports = router;
