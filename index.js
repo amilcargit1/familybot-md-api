@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 require('dotenv').config();
@@ -15,14 +16,35 @@ const loadRoutes = require('./utils/loadRoutes');
 // y el límite por IP no funcionaría correctamente.
 app.set('trust proxy', 1);
 
-app.use(compression()); // comprime las respuestas (más rápido, menos datos)
+app.use(compression());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// ---- Motor visual FamilyBot-MD ----
+// Inyecta el motor de partículas en las páginas HTML sin modificar cada archivo.
+const publicDir = path.join(__dirname, 'public');
+const particleScript = `\n<script src="/assets_particles.js"></script>\n<script>\n(function () {\n    function startParticles() {\n        if (!window.FamilyBotParticles) return;\n        const theme = localStorage.getItem('familybot_particle_theme') || 'fantasia';\n        const intensity = localStorage.getItem('familybot_particle_intensity') || 'medium';\n        const enabled = localStorage.getItem('familybot_particle_enabled');\n        if (enabled !== 'false') {\n            window.FamilyBotParticles.start(theme, intensity);\n        }\n    }\n    if (document.readyState === 'loading') {\n        document.addEventListener('DOMContentLoaded', startParticles, { once: true });\n    } else {\n        startParticles();\n    }\n})();\n</script>\n`;
+
+function sendPage(res, fileName) {
+    const filePath = path.join(publicDir, fileName);
+    fs.readFile(filePath, 'utf8', (err, html) => {
+        if (err) return res.status(500).send('No se pudo cargar la página.');
+        if (!html.includes('/assets_particles.js')) {
+            html = html.replace('</body>', `${particleScript}</body>`);
+        }
+        res.type('html').send(html);
+    });
+}
+
+// La raíz se sirve mediante sendPage para que también tenga los efectos.
+app.get('/', (req, res) => sendPage(res, 'index.html'));
+
+// Archivos estáticos: CSS, JS, imágenes, etc.
+app.use(express.static(publicDir));
 
 // ---- Límite de solicitudes por IP ----
 const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 300, // máximo 300 solicitudes por IP en esa ventana
+    windowMs: 15 * 60 * 1000,
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: false, message: 'Demasiadas solicitudes desde esta IP. Espera unos minutos e intenta de nuevo.' }
@@ -30,7 +52,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 15, // máximo 15 intentos de login/registro en esa ventana (evita fuerza bruta)
+    max: 15,
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: false, message: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.' }
@@ -40,19 +62,17 @@ app.use('/api/', globalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
-// ---- Páginas (sin necesidad de escribir .html) ----
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/register', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
-app.get('/dash', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dash.html')));
-app.get('/profile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'profile.html')));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'docs.html')));
-app.get('/forgot-password', (req, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
-app.get('/reset-password', (req, res) => res.sendFile(path.join(__dirname, 'public', 'reset-password.html')));
+// ---- Páginas ----
+app.get('/login', (req, res) => sendPage(res, 'login.html'));
+app.get('/register', (req, res) => sendPage(res, 'register.html'));
+app.get('/dash', (req, res) => sendPage(res, 'dash.html'));
+app.get('/profile', (req, res) => sendPage(res, 'profile.html'));
+app.get('/admin', (req, res) => sendPage(res, 'admin.html'));
+app.get('/docs', (req, res) => sendPage(res, 'docs.html'));
+app.get('/forgot-password', (req, res) => sendPage(res, 'forgot-password.html'));
+app.get('/reset-password', (req, res) => sendPage(res, 'reset-password.html'));
 
 // ---- Carga automática de TODAS las rutas dentro de /routes ----
-// Para agregar un endpoint nuevo: solo crea el archivo en la carpeta
-// correcta (routes/<categoria>/<nombre>.js) — no hace falta editar este archivo.
 loadRoutes(app, authHandler);
 
 // ---- 404 ----
@@ -63,7 +83,7 @@ app.use((req, res) => {
     res.status(404).send('<h1 style="font-family:sans-serif;color:#fff;background:#0a0b0e;padding:40px">Esta página todavía no existe. <a href="/" style="color:#ec4899">Volver al inicio</a></h1>');
 });
 
-// ---- Manejador de errores (para que un error de Redis, DB, etc. no tumbe todo el servidor) ----
+// ---- Manejador de errores ----
 app.use((err, req, res, next) => {
     console.error('Error no controlado:', err);
     res.status(500).json({ status: false, message: err.message || 'Error interno del servidor' });
