@@ -3,17 +3,17 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 
-// ============== IDENTIDAD DEL ADMINISTRADOR ==============
-// Se puede sobreescribir con variables de entorno en Render (ADMIN_EMAIL, etc).
-// Si no se definen, se usan estos valores por defecto.
 const ADMIN = {
-    username: process.env.ADMIN_USERNAME || 'FamilyBot-MD',
-    email: process.env.ADMIN_EMAIL || 'amilkarurquiagaramos1@gmail.com',
-    password: process.env.ADMIN_PASSWORD || 'AmilcarGit',
-    key: process.env.ADMIN_KEY || 'familybot-md'
+    username: process.env.ADMIN_USERNAME,
+    email: process.env.ADMIN_EMAIL,
+    password: process.env.ADMIN_PASSWORD,
+    key: process.env.ADMIN_KEY
 };
 
-// ============== REGISTRO ==============
+if (!ADMIN.username || !ADMIN.email || !ADMIN.password || !ADMIN.key) {
+    throw new Error('Las credenciales del administrador no están configuradas');
+}
+
 router.post('/register', async (req, res) => {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -31,14 +31,12 @@ router.post('/register', async (req, res) => {
     res.json({ status: true, message: 'Registro exitoso', key: newUser.key });
 });
 
-// ============== LOGIN ==============
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ status: false, message: 'Faltan datos: email, password' });
     }
 
-    // Login del administrador
     if (email === ADMIN.email && password === ADMIN.password) {
         return res.json({
             status: true,
@@ -62,7 +60,6 @@ router.post('/login', async (req, res) => {
     });
 });
 
-// ============== MI PERFIL (usado por el dashboard para mostrar solicitudes) ==============
 router.get('/me', async (req, res) => {
     const { apiKey } = req.query;
     if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
@@ -89,7 +86,6 @@ router.get('/me', async (req, res) => {
     });
 });
 
-// ============== ACTUALIZAR PERFIL (username / password) ==============
 router.post('/update-profile', async (req, res) => {
     const { apiKey, username, password } = req.body;
     if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
@@ -109,12 +105,10 @@ router.post('/update-profile', async (req, res) => {
     res.json({ status: true, message: 'Perfil actualizado correctamente' });
 });
 
-// ============== ESTADÍSTICAS GLOBALES (para la portada) ==============
 router.get('/stats', async (req, res) => {
     res.json({ status: true, users: await db.countUsers(), endpoints: 9 });
 });
 
-// ============== CANJEAR CÓDIGO ==============
 router.post('/redeem', async (req, res) => {
     const { apiKey, code } = req.body;
     if (!apiKey || !code) {
@@ -148,7 +142,6 @@ router.post('/redeem', async (req, res) => {
     });
 });
 
-// ============== ADMIN: CREAR CÓDIGO ==============
 router.post('/admin/create-code', async (req, res) => {
     const { adminKey, code, requests, maxUses } = req.body;
 
@@ -175,7 +168,6 @@ router.post('/admin/create-code', async (req, res) => {
     res.json({ status: true, message: 'Código creado', code: normalized });
 });
 
-// ============== ADMIN: VER TODOS LOS USUARIOS Y CÓDIGOS ==============
 router.get('/admin/all', async (req, res) => {
     const { apiKey } = req.query;
     if (apiKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
@@ -193,7 +185,6 @@ router.get('/admin/all', async (req, res) => {
     });
 });
 
-// ============== ADMIN: CAMBIAR PLAN/ROL DE UN USUARIO ==============
 router.post('/admin/set-role', async (req, res) => {
     const { adminKey, email, plan, limit } = req.body;
     if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
@@ -209,7 +200,6 @@ router.post('/admin/set-role', async (req, res) => {
     res.json({ status: true, message: 'Usuario actualizado' });
 });
 
-// ============== ADMIN: ELIMINAR USUARIO ==============
 router.post('/admin/delete', async (req, res) => {
     const { adminKey, email } = req.body;
     if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
@@ -220,7 +210,6 @@ router.post('/admin/delete', async (req, res) => {
     res.json({ status: true, message: 'Usuario eliminado' });
 });
 
-// ============== ADMIN: ELIMINAR CÓDIGO ==============
 router.post('/admin/delete-code', async (req, res) => {
     const { adminKey, code } = req.body;
     if (adminKey !== ADMIN.key) return res.status(403).json({ status: false, message: 'No autorizado' });
