@@ -10,6 +10,7 @@ global.startTime = Date.now();
 
 const { authHandler } = require('./middlewares/auth');
 const loadRoutes = require('./utils/loadRoutes');
+const { statsMiddleware } = require('./utils/stats');
 
 app.set('trust proxy', 1);
 
@@ -20,6 +21,7 @@ app.use(helmet({
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
+app.use(statsMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const globalLimiter = rateLimit({
