@@ -3,10 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db = require('../db');
-
 const ADMIN = { username: process.env.ADMIN_USERNAME, email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD, key: process.env.ADMIN_KEY };
 if (!ADMIN.username || !ADMIN.email || !ADMIN.password || !ADMIN.key) throw new Error('Las credenciales del administrador no están configuradas');
-
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9_.-]+$/;
 const API_KEY_REGEX = /^FamilyBot-MD-[a-f0-9]{48}$/i;
@@ -14,105 +12,19 @@ const MAX_INPUT_LENGTH = 100;
 const PASSWORD_MIN_LENGTH = 8;
 const BCRYPT_ROUNDS = 12;
 const DEFAULT_USER_LIMIT = 100;
-
-function validText(value, min = 1, max = MAX_INPUT_LENGTH) { return typeof value === 'string' && value.trim().length >= min && value.trim().length <= max; }
-function generateApiKey() { return `FamilyBot-MD-${crypto.randomBytes(24).toString('hex')}`; }
-function isApiKey(value) { return typeof value === 'string' && API_KEY_REGEX.test(value); }
-
-router.post('/register', async (req, res) => {
-    try {
-        const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
-        const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-        const password = typeof req.body.password === 'string' ? req.body.password : '';
-        if (!validText(username, 3, 30) || !USERNAME_REGEX.test(username) || !EMAIL_REGEX.test(email) || email.length > 150 || password.length < PASSWORD_MIN_LENGTH || password.length > 128) return res.status(400).json({ status: false, message: 'Datos de registro inválidos' });
-        if (email === ADMIN.email.toLowerCase() || username.toLowerCase() === ADMIN.username.toLowerCase()) return res.status(409).json({ status: false, message: 'Ese usuario o correo no está disponible' });
-        const exists = (await db.findUser('email', email)) || (await db.findUser('username', username));
-        if (exists) return res.status(409).json({ status: false, message: 'Ese usuario o correo ya existe' });
-        const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-        const newUser = await db.createUser({ username, email, password: hashedPassword, key: generateApiKey(), limit: DEFAULT_USER_LIMIT });
-        res.status(201).json({ status: true, message: 'Registro exitoso', data: { username: newUser.username, email: newUser.email, key: newUser.key, plan: newUser.plan, limit: newUser.limit } });
-    } catch (error) { console.error('Error en registro:', error); res.status(500).json({ status: false, message: 'No se pudo completar el registro' }); }
-});
-
-router.post('/login', async (req, res) => {
-    try {
-        const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-        const password = typeof req.body.password === 'string' ? req.body.password : '';
-        if (!EMAIL_REGEX.test(email) || email.length > 150 || password.length < 1 || password.length > 128) return res.status(400).json({ status: false, message: 'Credenciales inválidas' });
-        if (email === ADMIN.email.toLowerCase() && password === ADMIN.password) return res.json({ status: true, data: { username: ADMIN.username, email: ADMIN.email, key: ADMIN.key, plan: 'ADMIN VIP', role: 'admin' } });
-        const user = await db.findUser('email', email);
-        if (!user) return res.status(401).json({ status: false, message: 'Credenciales incorrectas' });
-        if (!await bcrypt.compare(password, user.password)) return res.status(401).json({ status: false, message: 'Credenciales incorrectas' });
-        res.json({ status: true, data: { username: user.username, email: user.email, key: user.key, plan: user.plan, role: 'user' } });
-    } catch (error) { console.error('Error en login:', error); res.status(500).json({ status: false, message: 'No se pudo completar el inicio de sesión' }); }
-});
-
-router.post('/regenerate-key', async (req, res) => {
-    try {
-        const apiKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
-        const password = typeof req.body.password === 'string' ? req.body.password : '';
-        if (!isApiKey(apiKey) || password.length < PASSWORD_MIN_LENGTH || password.length > 128) return res.status(400).json({ status: false, message: 'Datos inválidos' });
-        const user = await db.findUser('key', apiKey);
-        if (!user || !await bcrypt.compare(password, user.password)) return res.status(401).json({ status: false, message: 'Credenciales incorrectas' });
-        const newKey = generateApiKey();
-        await db.updateUserBy('id', user.id, { key: newKey });
-        res.json({ status: true, message: 'API Key regenerada correctamente', data: { key: newKey } });
-    } catch (error) { console.error('Error al regenerar API Key:', error); res.status(500).json({ status: false, message: 'No se pudo regenerar la API Key' }); }
-});
-
-router.get('/me', async (req, res) => {
-    const apiKey = typeof req.query.apiKey === 'string' ? req.query.apiKey.trim() : '';
-    if (!isApiKey(apiKey)) return res.status(400).json({ status: false, message: 'API Key inválida' });
-    const user = await db.findUser('key', apiKey);
-    if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
-    const today = new Date().toISOString().split('T')[0];
-    const requestToday = user.lastRequestDate === today ? user.requestToday : 0;
-    res.json({ status: true, data: { username: user.username, email: user.email, plan: user.plan, requests: { today: requestToday, total: user.totalRequest || 0, limit: user.limit || DEFAULT_USER_LIMIT, remaining: Math.max((user.limit || DEFAULT_USER_LIMIT) - requestToday, 0) } } });
-});
-
-router.post('/update-profile', async (req, res) => {
-    try {
-        const apiKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
-        const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
-        const password = typeof req.body.password === 'string' ? req.body.password : '';
-        if (!isApiKey(apiKey)) return res.status(400).json({ status: false, message: 'API Key inválida' });
-        const user = await db.findUser('key', apiKey);
-        if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
-        const updates = {};
-        if (username) { if (!validText(username, 3, 30) || !USERNAME_REGEX.test(username)) return res.status(400).json({ status: false, message: 'Username inválido' }); const existing = await db.findUser('username', username); if (existing && existing.id !== user.id) return res.status(400).json({ status: false, message: 'Ese username ya existe' }); updates.username = username; }
-        if (password) { if (password.length < PASSWORD_MIN_LENGTH || password.length > 128) return res.status(400).json({ status: false, message: 'La contraseña debe tener entre 8 y 128 caracteres' }); updates.password = await bcrypt.hash(password, BCRYPT_ROUNDS); }
-        if (Object.keys(updates).length === 0) return res.status(400).json({ status: false, message: 'No enviaste ningún cambio' });
-        await db.updateUserBy('id', user.id, updates); res.json({ status: true, message: 'Perfil actualizado correctamente' });
-    } catch (error) { console.error('Error al actualizar perfil:', error); res.status(500).json({ status: false, message: 'No se pudo actualizar el perfil' }); }
-});
-
-router.get('/stats', async (req, res) => res.json({ status: true, users: await db.countUsers(), endpoints: 9 }));
-
-router.post('/redeem', async (req, res) => {
-    const apiKey = typeof req.body.apiKey === 'string' ? req.body.apiKey.trim() : '';
-    const code = typeof req.body.code === 'string' ? req.body.code.trim().toUpperCase() : '';
-    if (!isApiKey(apiKey) || !validText(code, 3, 100)) return res.status(400).json({ status: false, message: 'Datos inválidos' });
-    const user = await db.findUser('key', apiKey); if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
-    const codes = await db.getCodes(); const found = codes.find(c => c.code === code);
-    if (!found) return res.status(404).json({ status: false, message: 'Código no válido' });
-    if (!found.active) return res.status(400).json({ status: false, message: 'Este código ya no está activo' });
-    if (found.uses >= found.maxUses) return res.status(400).json({ status: false, message: 'Este código ya alcanzó su límite de usos' });
-    if (found.usedBy.includes(user.email)) return res.status(400).json({ status: false, message: 'Ya canjeaste este código antes' });
-    const newLimit = (user.limit || DEFAULT_USER_LIMIT) + found.requests; await db.updateUserBy('id', user.id, { limit: newLimit });
-    found.uses += 1; found.usedBy.push(user.email); if (found.uses >= found.maxUses) found.active = false; await db.saveCodes(codes);
-    res.json({ status: true, message: `¡Código canjeado! +${found.requests} solicitudes agregadas`, new_limit: newLimit });
-});
-
-router.post('/admin/create-code', async (req, res) => {
-    const code = typeof req.body.code === 'string' ? req.body.code.trim().toUpperCase() : ''; const requests = Number(req.body.requests); const maxUses = Number(req.body.maxUses);
-    if (!validText(code, 3, 100) || !Number.isInteger(requests) || requests < 1 || requests > 100000 || !Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100000) return res.status(400).json({ status: false, message: 'Datos inválidos' });
-    const codes = await db.getCodes(); if (codes.find(c => c.code === code)) return res.status(400).json({ status: false, message: 'Ese código ya existe' });
-    codes.push({ code, requests, maxUses, uses: 0, usedBy: [], active: true, createdAt: new Date().toISOString() }); await db.saveCodes(codes); res.json({ status: true, message: 'Código creado', code });
-});
-
-router.get('/admin/all', async (req, res) => { const allUsers = await db.getUsers(); const users = allUsers.map(({ password, ...safe }) => safe); const codes = await db.getCodes(); res.json({ status: true, totalUsers: users.length, totalCodes: codes.filter(c => c.active).length, users, codes }); });
-router.post('/admin/set-role', async (req, res) => { const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : ''; const plan = typeof req.body.plan === 'string' ? req.body.plan.trim() : ''; const limit = req.body.limit === undefined ? undefined : Number(req.body.limit); if (!EMAIL_REGEX.test(email) || email.length > 150) return res.status(400).json({ status: false, message: 'Email inválido' }); if (plan && !validText(plan, 1, 50)) return res.status(400).json({ status: false, message: 'Plan inválido' }); if (limit !== undefined && (!Number.isInteger(limit) || limit < 0 || limit > 1000000)) return res.status(400).json({ status: false, message: 'Límite inválido' }); const user = await db.findUser('email', email); if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' }); const updates = {}; if (plan) updates.plan = plan; if (limit !== undefined) updates.limit = limit; if (Object.keys(updates).length === 0) return res.status(400).json({ status: false, message: 'No enviaste cambios' }); await db.updateUserBy('id', user.id, updates); res.json({ status: true, message: 'Usuario actualizado' }); });
-router.post('/admin/delete', async (req, res) => { const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : ''; if (!EMAIL_REGEX.test(email) || email.length > 150) return res.status(400).json({ status: false, message: 'Email inválido' }); const allUsers = await db.getUsers(); const users = allUsers.filter(u => u.email.toLowerCase() !== email); if (users.length === allUsers.length) return res.status(404).json({ status: false, message: 'Usuario no encontrado' }); await db.saveUsers(users); res.json({ status: true, message: 'Usuario eliminado' }); });
-router.post('/admin/delete-code', async (req, res) => { const code = typeof req.body.code === 'string' ? req.body.code.trim().toUpperCase() : ''; if (!validText(code, 3, 100)) return res.status(400).json({ status: false, message: 'Código inválido' }); const codes = await db.getCodes(); const filtered = codes.filter(c => c.code !== code); if (filtered.length === codes.length) return res.status(404).json({ status: false, message: 'Código no encontrado' }); await db.saveCodes(filtered); res.json({ status: true, message: 'Código eliminado' }); });
-
-module.exports = router;
+function validText(value,min=1,max=MAX_INPUT_LENGTH){return typeof value==='string'&&value.trim().length>=min&&value.trim().length<=max}
+function generateApiKey(){return `FamilyBot-MD-${crypto.randomBytes(24).toString('hex')}`}
+function isApiKey(value){return typeof value==='string'&&API_KEY_REGEX.test(value)}
+router.post('/register',async(req,res)=>{try{const username=typeof req.body.username==='string'?req.body.username.trim():'';const email=typeof req.body.email==='string'?req.body.email.trim().toLowerCase():'';const password=typeof req.body.password==='string'?req.body.password:'';if(!validText(username,3,30)||!USERNAME_REGEX.test(username)||!EMAIL_REGEX.test(email)||email.length>150||password.length<PASSWORD_MIN_LENGTH||password.length>128)return res.status(400).json({status:false,message:'Datos de registro inválidos'});if(email===ADMIN.email.toLowerCase()||username.toLowerCase()===ADMIN.username.toLowerCase())return res.status(409).json({status:false,message:'Ese usuario o correo no está disponible'});const exists=(await db.findUser('email',email))||(await db.findUser('username',username));if(exists)return res.status(409).json({status:false,message:'Ese usuario o correo ya existe'});const hashedPassword=await bcrypt.hash(password,BCRYPT_ROUNDS);const newUser=await db.createUser({username,email,password:hashedPassword,key:generateApiKey(),limit:DEFAULT_USER_LIMIT});res.status(201).json({status:true,message:'Registro exitoso',data:{username:newUser.username,email:newUser.email,key:newUser.key,plan:newUser.plan,limit:newUser.limit}})}catch(error){console.error('Error en registro:',error);res.status(500).json({status:false,message:'No se pudo completar el registro'})}});
+router.post('/login',async(req,res)=>{try{const email=typeof req.body.email==='string'?req.body.email.trim().toLowerCase():'';const password=typeof req.body.password==='string'?req.body.password:'';if(!EMAIL_REGEX.test(email)||email.length>150||password.length<1||password.length>128)return res.status(400).json({status:false,message:'Credenciales inválidas'});if(email===ADMIN.email.toLowerCase()&&password===ADMIN.password)return res.json({status:true,data:{username:ADMIN.username,email:ADMIN.email,key:ADMIN.key,plan:'ADMIN VIP',role:'admin'}});const user=await db.findUser('email',email);if(!user||!await bcrypt.compare(password,user.password))return res.status(401).json({status:false,message:'Credenciales incorrectas'});res.json({status:true,data:{username:user.username,email:user.email,key:user.key,plan:user.plan,role:'user'}})}catch(error){console.error('Error en login:',error);res.status(500).json({status:false,message:'No se pudo completar el inicio de sesión'})}});
+router.post('/regenerate-key',async(req,res)=>{try{const apiKey=typeof req.body.apiKey==='string'?req.body.apiKey.trim():'';const password=typeof req.body.password==='string'?req.body.password:'';if(!isApiKey(apiKey)||password.length<PASSWORD_MIN_LENGTH||password.length>128)return res.status(400).json({status:false,message:'Datos inválidos'});const user=await db.findUser('key',apiKey);if(!user||!await bcrypt.compare(password,user.password))return res.status(401).json({status:false,message:'Credenciales incorrectas'});const newKey=generateApiKey();await db.updateUserBy('id',user.id,{key:newKey});res.json({status:true,message:'API Key regenerada correctamente',data:{key:newKey}})}catch(error){console.error('Error al regenerar API Key:',error);res.status(500).json({status:false,message:'No se pudo regenerar la API Key'})}});
+router.get('/me',async(req,res)=>{const apiKey=typeof req.query.apiKey==='string'?req.query.apiKey.trim():'';if(!isApiKey(apiKey))return res.status(400).json({status:false,message:'API Key inválida'});const user=await db.findUser('key',apiKey);if(!user)return res.status(404).json({status:false,message:'Usuario no encontrado'});const today=new Date().toISOString().split('T')[0];const requestToday=user.lastRequestDate===today?user.requestToday||0:0;res.json({status:true,data:{username:user.username,email:user.email,plan:user.plan,requests:{today:requestToday,total:user.totalRequest||0,limit:user.limit||DEFAULT_USER_LIMIT,remaining:Math.max((user.limit||DEFAULT_USER_LIMIT)-requestToday,0)}}})});
+router.get('/stats',async(req,res)=>{try{const users=await db.getUsers();const today=new Date().toISOString().split('T')[0];let requestsToday=0,totalRequests=0;for(const user of users){requestsToday+=user.lastRequestDate===today?(user.requestToday||0):0;totalRequests+=user.totalRequest||0}res.json({status:true,data:{users:users.length,requests:{today:requestsToday,total:totalRequests},limits:{configured:users.reduce((sum,user)=>sum+(user.limit||DEFAULT_USER_LIMIT),0)}}})}catch(error){console.error('Error en estadísticas:',error);res.status(500).json({status:false,message:'No se pudieron obtener las estadísticas'})}});
+router.post('/update-profile',async(req,res)=>{try{const apiKey=typeof req.body.apiKey==='string'?req.body.apiKey.trim():'';const username=typeof req.body.username==='string'?req.body.username.trim():'';const password=typeof req.body.password==='string'?req.body.password:'';if(!isApiKey(apiKey))return res.status(400).json({status:false,message:'API Key inválida'});const user=await db.findUser('key',apiKey);if(!user)return res.status(404).json({status:false,message:'Usuario no encontrado'});const updates={};if(username){if(!validText(username,3,30)||!USERNAME_REGEX.test(username))return res.status(400).json({status:false,message:'Username inválido'});const existing=await db.findUser('username',username);if(existing&&existing.id!==user.id)return res.status(400).json({status:false,message:'Ese username ya existe'});updates.username=username}if(password){if(password.length<PASSWORD_MIN_LENGTH||password.length>128)return res.status(400).json({status:false,message:'La contraseña debe tener entre 8 y 128 caracteres'});updates.password=await bcrypt.hash(password,BCRYPT_ROUNDS)}if(!Object.keys(updates).length)return res.status(400).json({status:false,message:'No enviaste ningún cambio'});await db.updateUserBy('id',user.id,updates);res.json({status:true,message:'Perfil actualizado correctamente'})}catch(error){console.error('Error al actualizar perfil:',error);res.status(500).json({status:false,message:'No se pudo actualizar el perfil'})}});
+router.post('/redeem',async(req,res)=>{const apiKey=typeof req.body.apiKey==='string'?req.body.apiKey.trim():'';const code=typeof req.body.code==='string'?req.body.code.trim().toUpperCase():'';if(!isApiKey(apiKey)||!validText(code,3,100))return res.status(400).json({status:false,message:'Datos inválidos'});const user=await db.findUser('key',apiKey);if(!user)return res.status(404).json({status:false,message:'Usuario no encontrado'});const codes=await db.getCodes();const found=codes.find(c=>c.code===code);if(!found)return res.status(404).json({status:false,message:'Código no válido'});if(!found.active)return res.status(400).json({status:false,message:'Este código ya no está activo'});if(found.uses>=found.maxUses)return res.status(400).json({status:false,message:'Este código ya alcanzó su límite de usos'});if(found.usedBy.includes(user.email))return res.status(400).json({status:false,message:'Ya canjeaste este código antes'});const newLimit=(user.limit||DEFAULT_USER_LIMIT)+found.requests;await db.updateUserBy('id',user.id,{limit:newLimit});found.uses+=1;found.usedBy.push(user.email);if(found.uses>=found.maxUses)found.active=false;await db.saveCodes(codes);res.json({status:true,message:`¡Código canjeado! +${found.requests} solicitudes agregadas`,new_limit:newLimit})});
+router.post('/admin/create-code',async(req,res)=>{const code=typeof req.body.code==='string'?req.body.code.trim().toUpperCase():'';const requests=Number(req.body.requests);const maxUses=Number(req.body.maxUses);if(!validText(code,3,100)||!Number.isInteger(requests)||requests<1||requests>100000||!Number.isInteger(maxUses)||maxUses<1||maxUses>100000)return res.status(400).json({status:false,message:'Datos inválidos'});const codes=await db.getCodes();if(codes.find(c=>c.code===code))return res.status(400).json({status:false,message:'Ese código ya existe'});codes.push({code,requests,maxUses,uses:0,usedBy:[],active:true,createdAt:new Date().toISOString()});await db.saveCodes(codes);res.json({status:true,message:'Código creado',code})});
+router.get('/admin/all',async(req,res)=>{const allUsers=await db.getUsers();const users=allUsers.map(({password,...safe})=>safe);const codes=await db.getCodes();res.json({status:true,totalUsers:users.length,totalCodes:codes.filter(c=>c.active).length,users,codes})});
+router.post('/admin/set-role',async(req,res)=>{const email=typeof req.body.email==='string'?req.body.email.trim().toLowerCase():'';const plan=typeof req.body.plan==='string'?req.body.plan.trim():'';const limit=req.body.limit===undefined?undefined:Number(req.body.limit);if(!EMAIL_REGEX.test(email)||email.length>150)return res.status(400).json({status:false,message:'Email inválido'});if(plan&&!validText(plan,1,50))return res.status(400).json({status:false,message:'Plan inválido'});if(limit!==undefined&&(!Number.isInteger(limit)||limit<0||limit>1000000))return res.status(400).json({status:false,message:'Límite inválido'});const user=await db.findUser('email',email);if(!user)return res.status(404).json({status:false,message:'Usuario no encontrado'});const updates={};if(plan)updates.plan=plan;if(limit!==undefined)updates.limit=limit;if(!Object.keys(updates).length)return res.status(400).json({status:false,message:'No enviaste cambios'});await db.updateUserBy('id',user.id,updates);res.json({status:true,message:'Usuario actualizado'})});
+router.post('/admin/delete',async(req,res)=>{const email=typeof req.body.email==='string'?req.body.email.trim().toLowerCase():'';if(!EMAIL_REGEX.test(email)||email.length>150)return res.status(400).json({status:false,message:'Email inválido'});const allUsers=await db.getUsers();const users=allUsers.filter(u=>u.email.toLowerCase()!==email);if(users.length===allUsers.length)return res.status(404).json({status:false,message:'Usuario no encontrado'});await db.saveUsers(users);res.json({status:true,message:'Usuario eliminado'})});
+router.post('/admin/delete-code',async(req,res)=>{const code=typeof req.body.code==='string'?req.body.code.trim().toUpperCase():'';if(!validText(code,3,100))return res.status(400).json({status:false,message:'Código inválido'});const codes=await db.getCodes();const filtered=codes.filter(c=>c.code!==code);if(filtered.length===codes.length)return res.status(404).json({status:false,message:'Código no encontrado'});await db.saveCodes(filtered);res.json({status:true,message:'Código eliminado'})});
+module.exports=router;
