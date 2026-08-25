@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
 
 const CATEGORY_LABELS = {
     tools: 'Herramientas',
@@ -9,36 +10,60 @@ const CATEGORY_LABELS = {
     fun: 'Diversión'
 };
 
-const ENDPOINT_TYPES = new Set(['api', 'download', 'search', 'media', 'utility', 'auth', 'admin', 'custom']);
-
-const TYPE_META = {
-    api: { label: 'API', icon: 'fas fa-plug', resultType: 'raw' },
-    download: { label: 'Descarga', icon: 'fas fa-download', resultType: 'link' },
-    search: { label: 'Búsqueda', icon: 'fas fa-magnifying-glass', resultType: 'text' },
-    media: { label: 'Media', icon: 'fas fa-photo-film', resultType: 'image' },
-    utility: { label: 'Utilidad', icon: 'fas fa-toolbox', resultType: 'raw' },
-    auth: { label: 'Auth', icon: 'fas fa-key', resultType: 'raw' },
-    admin: { label: 'Admin', icon: 'fas fa-shield-halved', resultType: 'raw' },
-    custom: { label: 'Personalizado', icon: 'fas fa-code', resultType: 'raw' }
-};
-
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function normalizeType(meta, category, name) {
-    if (meta.type && ENDPOINT_TYPES.has(meta.type)) return meta.type;
-    if (category === 'download') return 'download';
-    if (category === 'search') return 'search';
-    if (category === 'anime') return 'media';
-    if (category === 'auth') return 'auth';
-    if (category === 'admin') return 'admin';
-    if (name.includes('download') || name.includes('descarg')) return 'download';
-    if (name.includes('search') || name.includes('buscar')) return 'search';
-    if (name.includes('media') || name.includes('video') || name.includes('audio')) return 'media';
-    return 'api';
+// ============== SEGURIDAD: atrapar errores de rutas async automáticamente ==============
+// Express 4 NO atrapa solo los errores lanzados dentro de funciones `async`
+// en una ruta. Si a alguien se le olvida poner try/catch en un endpoint
+// nuevo, ese error puede colgar la solicitud o tumbar el servidor entero.
+// Para no depender de que cada archivo lo recuerde, "parchamos" el propio
+// express.Router() una sola vez aquí: a partir de este punto, CUALQUIER
+// router creado con express.Router() (en cualquier archivo de /routes)
+// atrapa automáticamente los errores de sus rutas y los manda al manejador
+// de errores global en index.js.
+if (!express.__familybotPatched) {
+    const originalRouterFactory = express.Router;
+    express.Router = function patchedRouter(...args) {
+        const router = originalRouterFactory(...args);
+        ['get', 'post', 'put', 'delete', 'patch', 'all'].forEach(method => {
+            const original = router[method].bind(router);
+            router[method] = function (routePath, ...handlers) {
+                const wrapped = handlers.map(h => {
+                    if (typeof h !== 'function') return h;
+                    return function (req, res, next) {
+                        Promise.resolve(h(req, res, next)).catch(next);
+                    };
+                });
+                return original(routePath, ...wrapped);
+            };
+        });
+        return router;
+    };
+    express.__familybotPatched = true;
 }
 
+/**
+ * Carga automáticamente TODAS las rutas dentro de /routes, sin importar
+ * cuántos niveles de subcarpetas tengan (totalmente recursivo).
+ *
+ * Además, arma una lista con la información de cada endpoint protegido
+ * (guardada en app.locals.apiEndpoints) para que el Dashboard pueda
+ * mostrar sus tarjetas automáticamente, sin tocar public/dash.html.
+ *
+ * Convención:
+ * - Un archivo suelto directamente en routes/ (ej: routes/auth.js) = ruta
+ *   PÚBLICA en /api/<nombre>. Maneja su propia seguridad.
+ *
+ * - Un archivo dentro de cualquier subcarpeta (ej: routes/tools/qr.js) =
+ *   ruta PROTEGIDA (pasa por authHandler) en /api/<carpeta>/.../<archivo>.
+ *
+ * Para que un endpoint protegido aparezca bien descrito en el Dashboard,
+ * el archivo puede exportar además `router.meta = {...}` (ver ejemplos en
+ * routes/tools/qr.js o routes/anime/waifu.js). Si no define `meta`, el
+ * Dashboard igual le arma una tarjeta genérica automáticamente.
+ */
 function loadRoutes(app, authHandler) {
     const routesDir = path.join(__dirname, '..', 'routes');
     if (!fs.existsSync(routesDir)) return;
@@ -61,37 +86,32 @@ function loadRoutes(app, authHandler) {
             const router = require(fullPath);
 
             if (segments.length === 0) {
+                // Archivo directo en routes/ = público
                 const routePath = `/api/${name}`;
                 app.use(routePath, router);
                 console.log(`🔓 Ruta pública: ${routePath}`);
             } else {
+                // Dentro de subcarpeta(s) = protegido
                 const routePath = `/api/${segments.join('/')}/${name}`;
                 app.use(routePath, authHandler, router);
                 console.log(`🔌 Ruta protegida: ${routePath}`);
 
                 const category = segments[0];
                 const meta = router.meta || {};
-                const type = normalizeType(meta, category, name);
-                const typeMeta = TYPE_META[type];
 
                 endpoints.push({
                     category,
                     categoryLabel: CATEGORY_LABELS[category] || capitalize(category),
-                    type,
-                    typeLabel: typeMeta.label,
                     path: routePath,
                     title: meta.title || capitalize(name),
                     description: meta.description || '',
-                    icon: meta.icon || typeMeta.icon,
+                    icon: meta.icon || 'fas fa-plug',
+                    method: meta.method || 'GET',
                     fields: meta.fields || [],
-                    resultType: meta.resultType || typeMeta.resultType,
+                    resultType: meta.resultType || 'raw',
                     resultField: meta.resultField || null,
                     previewFields: meta.previewFields || [],
-                    ui: {
-                        mode: type,
-                        label: typeMeta.label,
-                        icon: typeMeta.icon
-                    }
+                    example: meta.example || null
                 });
             }
         });
