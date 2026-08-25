@@ -6,135 +6,26 @@
 <title>FamilyBot-MD · Mi Perfil</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <style>
-    :root {
-        --bg-primary: #0a0b0e;
-        --bg-card: #14161c;
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --accent: #ec4899;
-        --accent-purple: #a855f7;
-        --accent-gradient: linear-gradient(135deg, #ec4899, #a855f7);
-        --border-color: rgba(255,255,255,0.07);
-        --radius: 20px;
-    }
-    :root[data-theme="light"] {
-        --bg-primary: #f3f4f8;
-        --bg-card: #ffffff;
-        --text-primary: #1a1d29;
-        --text-secondary: #64748b;
-        --border-color: rgba(15,23,42,0.08);
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; min-height: 100vh; transition: background 0.3s ease, color 0.3s ease; }
-    header {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 18px 20px; border-bottom: 1px solid var(--border-color);
-        position: sticky; top: 0; background: var(--bg-primary); z-index: 10;
-        transition: background 0.3s ease, border-color 0.3s ease;
-    }
-    .brand { font-weight: 800; font-size: 1.1rem; }
-    .brand span { background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .header-actions { display: flex; gap: 10px; }
-    .theme-btn, .back-btn { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px 14px; border-radius: 10px; font-size: 0.8rem; cursor: pointer; text-decoration: none; }
-    main { max-width: 480px; margin: 0 auto; padding: 24px 18px 60px; }
-    .card { background: var(--bg-card); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; border: 1px solid var(--border-color); transition: background 0.3s ease, border-color 0.3s ease; }
-    .card h3 { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
-    label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; margin-top: 14px; }
-    input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; color: var(--text-primary); font-size: 0.95rem; outline: none; transition: background 0.3s ease, border-color 0.2s ease; }
-    input:focus { border-color: var(--accent); }
-    input:disabled { opacity: 0.5; }
-    button.save-btn { width: 100%; margin-top: 20px; background: var(--accent-gradient); border: none; border-radius: 12px; padding: 13px; color: #fff; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
-    .msg { margin-top: 12px; font-size: 0.85rem; text-align: center; min-height: 18px; }
-    .msg.error { color: #ef4444; }
-    .msg.success { color: #22c55e; }
+:root{--bg-primary:#0a0b0e;--bg-card:#14161c;--text-primary:#f1f5f9;--text-secondary:#94a3b8;--accent:#ec4899;--accent-purple:#a855f7;--accent-gradient:linear-gradient(135deg,#ec4899,#a855f7);--border-color:rgba(255,255,255,.07);--radius:20px}:root[data-theme="light"]{--bg-primary:#f3f4f8;--bg-card:#fff;--text-primary:#1a1d29;--text-secondary:#64748b;--border-color:rgba(15,23,42,.08)}*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;min-height:100vh;transition:background .3s ease,color .3s ease}header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid var(--border-color);position:sticky;top:0;background:var(--bg-primary);z-index:10}.brand{font-weight:800;font-size:1.1rem}.brand span{background:var(--accent-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}.header-actions{display:flex;gap:10px}.theme-btn,.back-btn{background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);padding:8px 14px;border-radius:10px;font-size:.8rem;cursor:pointer;text-decoration:none}main{max-width:480px;margin:0 auto;padding:24px 18px 60px}.card{background:var(--bg-card);border-radius:var(--radius);padding:22px;margin-bottom:18px;border:1px solid var(--border-color);transition:background .3s ease,border-color .3s ease}.card h3{font-size:.9rem;color:var(--text-secondary);margin-bottom:16px;text-transform:uppercase;letter-spacing:.05em}label{display:block;font-size:.8rem;color:var(--text-secondary);margin-bottom:6px;margin-top:14px}input{width:100%;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;color:var(--text-primary);font-size:.95rem;outline:none;transition:background .3s ease,border-color .2s ease}input:focus{border-color:var(--accent)}input:disabled{opacity:.5}button.save-btn,.action-btn{width:100%;margin-top:20px;background:var(--accent-gradient);border:none;border-radius:12px;padding:13px;color:#fff;font-weight:700;font-size:.9rem;cursor:pointer}.action-btn.secondary{background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary)}.msg{margin-top:12px;font-size:.85rem;text-align:center;min-height:18px}.msg.error{color:#ef4444}.msg.success{color:#22c55e}.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:var(--bg-primary);border-radius:14px;padding:14px}.stat span{display:block;color:var(--text-secondary);font-size:.7rem;margin-bottom:6px;text-transform:uppercase}.stat strong{font-size:1.15rem}.key-box{background:var(--bg-primary);border-radius:12px;padding:12px;font-family:monospace;font-size:.78rem;word-break:break-all;color:var(--accent);line-height:1.5}.key-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.key-actions button{margin-top:10px;padding:10px}.warning{font-size:.75rem;color:var(--text-secondary);margin-top:10px;line-height:1.4}
 </style>
 </head>
 <body>
-    <header>
-        <div class="brand"><span>FamilyBot-MD</span></div>
-        <div class="header-actions">
-            <button class="theme-btn" id="themeBtn"><i class="fas fa-moon"></i></button>
-            <a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a>
-        </div>
-    </header>
-
-    <main>
-        <div class="card">
-            <h3>Información de la cuenta</h3>
-            <label>Correo (no editable)</label>
-            <input type="email" id="emailField" disabled>
-
-            <label>Usuario</label>
-            <input type="text" id="usernameField" placeholder="Tu nombre de usuario">
-
-            <label>Nueva contraseña (opcional)</label>
-            <input type="password" id="passwordField" placeholder="Dejar vacío para no cambiarla">
-
-            <button class="save-btn" id="saveBtn">Guardar cambios</button>
-            <div class="msg" id="msg"></div>
-        </div>
-    </main>
-
-    <script>
-        const savedTheme = localStorage.getItem('familybot_theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        function updateThemeIcon() {
-            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-            document.getElementById('themeBtn').innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-        }
-        updateThemeIcon();
-        document.getElementById('themeBtn').addEventListener('click', () => {
-            const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('familybot_theme', next);
-            updateThemeIcon();
-        });
-
-        const apiKey = localStorage.getItem('familybot_key');
-        if (!apiKey) window.location.href = '/login';
-
-        async function loadProfile() {
-            try {
-                const res = await fetch(`/api/auth/me?apiKey=${encodeURIComponent(apiKey)}`);
-                const data = await res.json();
-                if (data.status) {
-                    document.getElementById('emailField').value = data.data.email;
-                    document.getElementById('usernameField').value = data.data.username;
-                    localStorage.setItem('familybot_username', data.data.username);
-                }
-            } catch (err) { console.error(err); }
-        }
-        loadProfile();
-
-        document.getElementById('saveBtn').addEventListener('click', async () => {
-            const username = document.getElementById('usernameField').value.trim();
-            const password = document.getElementById('passwordField').value.trim();
-            const msgDiv = document.getElementById('msg');
-
-            msgDiv.className = 'msg';
-            msgDiv.innerText = 'Guardando...';
-
-            try {
-                const res = await fetch('/api/auth/update-profile', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey, username, password })
-                });
-                const data = await res.json();
-                if (data.status) {
-                    msgDiv.className = 'msg success';
-                    msgDiv.innerText = data.message;
-                    localStorage.setItem('familybot_username', username);
-                    document.getElementById('passwordField').value = '';
-                } else {
-                    msgDiv.className = 'msg error';
-                    msgDiv.innerText = data.message;
-                }
-            } catch (err) {
-                msgDiv.className = 'msg error';
-                msgDiv.innerText = 'Error de conexión';
-            }
-        });
-    </script>
+<header><div class="brand"><span>FamilyBot-MD</span></div><div class="header-actions"><button class="theme-btn" id="themeBtn"><i class="fas fa-moon"></i></button><a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a></div></header>
+<main>
+<div class="card"><h3>Resumen de uso</h3><div class="stats-grid"><div class="stat"><span>Hoy</span><strong id="todayStat">-</strong></div><div class="stat"><span>Total</span><strong id="totalStat">-</strong></div><div class="stat"><span>Límite</span><strong id="limitStat">-</strong></div><div class="stat"><span>Restantes</span><strong id="remainingStat">-</strong></div></div></div>
+<div class="card"><h3>API Key</h3><div class="key-box" id="keyField">••••••••••••••••</div><div class="key-actions"><button class="action-btn" id="copyKeyBtn">Copiar</button><button class="action-btn secondary" id="regenKeyBtn">Regenerar</button></div><div class="warning">Al regenerar la API Key, la clave anterior dejará de funcionar.</div><div class="msg" id="keyMsg"></div></div>
+<div class="card"><h3>Información de la cuenta</h3><label>Correo (no editable)</label><input type="email" id="emailField" disabled><label>Usuario</label><input type="text" id="usernameField" placeholder="Tu nombre de usuario"><label>Nueva contraseña (opcional)</label><input type="password" id="passwordField" placeholder="Dejar vacío para no cambiarla"><button class="save-btn" id="saveBtn">Guardar cambios</button><div class="msg" id="msg"></div></div>
+<div class="card"><h3>Regenerar API Key</h3><label>Contraseña actual</label><input type="password" id="regenPassword" placeholder="Tu contraseña"><button class="save-btn" id="confirmRegenBtn">Confirmar regeneración</button><div class="msg" id="regenMsg"></div></div>
+</main>
+<script>
+const savedTheme=localStorage.getItem('familybot_theme')||'dark';document.documentElement.setAttribute('data-theme',savedTheme);function updateThemeIcon(){const isLight=document.documentElement.getAttribute('data-theme')==='light';document.getElementById('themeBtn').innerHTML=isLight?'<i class="fas fa-sun"></i>':'<i class="fas fa-moon"></i>'}updateThemeIcon();document.getElementById('themeBtn').addEventListener('click',()=>{const next=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',next);localStorage.setItem('familybot_theme',next);updateThemeIcon()});
+let apiKey=localStorage.getItem('familybot_key');if(!apiKey)window.location.href='/login';
+async function loadProfile(){try{const res=await fetch(`/api/auth/me?apiKey=${encodeURIComponent(apiKey)}`);const data=await res.json();if(!data.status){localStorage.removeItem('familybot_key');window.location.href='/login';return}const d=data.data;document.getElementById('emailField').value=d.email;document.getElementById('usernameField').value=d.username;document.getElementById('todayStat').innerText=d.requests.today;document.getElementById('totalStat').innerText=d.requests.total;document.getElementById('limitStat').innerText=d.requests.limit;document.getElementById('remainingStat').innerText=d.requests.remaining;localStorage.setItem('familybot_username',d.username)}catch(err){console.error(err)}}
+function refreshKey(){document.getElementById('keyField').innerText=apiKey}refreshKey();loadProfile();
+document.getElementById('copyKeyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(apiKey);document.getElementById('keyMsg').className='msg success';document.getElementById('keyMsg').innerText='API Key copiada'}catch{document.getElementById('keyMsg').className='msg error';document.getElementById('keyMsg').innerText='No se pudo copiar'}});
+document.getElementById('regenKeyBtn').addEventListener('click',()=>{document.getElementById('regenPassword').focus()});
+document.getElementById('confirmRegenBtn').addEventListener('click',async()=>{const password=document.getElementById('regenPassword').value;const msg=document.getElementById('regenMsg');if(!password){msg.className='msg error';msg.innerText='Escribe tu contraseña';return}msg.className='msg';msg.innerText='Regenerando...';try{const res=await fetch('/api/auth/regenerate-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,password})});const data=await res.json();if(!data.status){msg.className='msg error';msg.innerText=data.message;return}apiKey=data.data.key;localStorage.setItem('familybot_key',apiKey);refreshKey();document.getElementById('regenPassword').value='';msg.className='msg success';msg.innerText='API Key regenerada correctamente'}catch{msg.className='msg error';msg.innerText='Error de conexión'}});
+document.getElementById('saveBtn').addEventListener('click',async()=>{const username=document.getElementById('usernameField').value.trim();const password=document.getElementById('passwordField').value.trim();const msgDiv=document.getElementById('msg');msgDiv.className='msg';msgDiv.innerText='Guardando...';try{const res=await fetch('/api/auth/update-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,username,password})});const data=await res.json();if(data.status){msgDiv.className='msg success';msgDiv.innerText=data.message;localStorage.setItem('familybot_username',username);document.getElementById('passwordField').value=''}else{msgDiv.className='msg error';msgDiv.innerText=data.message}}catch{msgDiv.className='msg error';msgDiv.innerText='Error de conexión'}});
+</script>
 </body>
 </html>
