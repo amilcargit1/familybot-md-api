@@ -24,7 +24,8 @@ router.meta = {
         { name: 'text', label: 'Texto o URL', placeholder: 'Escribe un texto o URL...' }
     ],
     resultType: 'image',
-    resultField: 'result'
+    resultField: 'result',
+    example: { status: true, creator: 'familybot-md', result: 'data:image/png;base64,iVBORw0KGgo...' }
 };
 
 module.exports = router;
