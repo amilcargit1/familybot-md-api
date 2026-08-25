@@ -14,31 +14,22 @@ if (!ADMIN.username || !ADMIN.email || !ADMIN.password || !ADMIN.key) {
     throw new Error('Las credenciales del administrador no están configuradas');
 }
 
-function getBearerToken(req) {
-    const authorization = req.get('authorization');
-    if (!authorization) return null;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_INPUT_LENGTH = 100;
+const PASSWORD_MIN_LENGTH = 8;
+const BCRYPT_ROUNDS = 12;
 
-    const [scheme, token] = authorization.split(' ');
-    if (scheme !== 'Bearer' || !token) return null;
-
-    return token;
-}
-
-function requireAdmin(req, res, next) {
-    const token = getBearerToken(req);
-
-    if (!token || token !== ADMIN.key) {
-        return res.status(403).json({ status: false, message: 'No autorizado' });
-    }
-
-    req.user = { role: 'admin', plan: 'ADMIN VIP' };
-    next();
+function validText(value, min = 1, max = MAX_INPUT_LENGTH) {
+    return typeof value === 'string' && value.trim().length >= min && value.trim().length <= max;
 }
 
 router.post('/register', async (req, res) => {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) {
-        return res.status(400).json({ status: false, message: 'Faltan datos: username, email, password' });
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!validText(username, 3, 30) || !EMAIL_REGEX.test(email) || email.length > 150 || password.length < PASSWORD_MIN_LENGTH || password.length > 128) {
+        return res.status(400).json({ status: false, message: 'Datos de registro inválidos' });
     }
 
     const exists = (await db.findUser('email', email)) || (await db.findUser('username', username));
@@ -46,19 +37,21 @@ router.post('/register', async (req, res) => {
         return res.status(400).json({ status: false, message: 'Ese usuario o correo ya existe' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const newUser = await db.createUser({ username, email, password: hashedPassword });
 
     res.json({ status: true, message: 'Registro exitoso', key: newUser.key });
 });
 
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ status: false, message: 'Faltan datos: email, password' });
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!EMAIL_REGEX.test(email) || email.length > 150 || password.length < 1 || password.length > 128) {
+        return res.status(400).json({ status: false, message: 'Credenciales inválidas' });
     }
 
-    if (email === ADMIN.email && password === ADMIN.password) {
+    if (email === ADMIN.email.toLowerCase() && password === ADMIN.password) {
         return res.json({
             status: true,
             data: { username: ADMIN.username, email: ADMIN.email, key: ADMIN.key, plan: 'ADMIN VIP', role: 'admin' }
@@ -83,7 +76,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', async (req, res) => {
     const { apiKey } = req.query;
-    if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
+    if (!validText(apiKey, 16, 200)) return res.status(400).json({ status: false, message: 'ApiKey inválida' });
 
     const user = await db.findUser('key', apiKey);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
@@ -101,22 +94,33 @@ router.get('/me', async (req, res) => {
                 today: requestToday,
                 total: user.totalRequest || 0,
                 limit: user.limit || 100,
-                remaining: (user.limit || 100) - requestToday
+                remaining: Math.max((user.limit || 100) - requestToday, 0)
             }
         }
     });
 });
 
 router.post('/update-profile', async (req, res) => {
-    const { apiKey, username, password } = req.body;
-    if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
+    const { apiKey } = req.body;
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!validText(apiKey, 16, 200)) return res.status(400).json({ status: false, message: 'ApiKey inválida' });
 
     const user = await db.findUser('key', apiKey);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
     const updates = {};
-    if (username && username.trim()) updates.username = username.trim();
-    if (password && password.trim()) updates.password = await bcrypt.hash(password.trim(), 10);
+    if (username) {
+        if (!validText(username, 3, 30)) return res.status(400).json({ status: false, message: 'Username inválido' });
+        const existing = await db.findUser('username', username);
+        if (existing && existing.id !== user.id) return res.status(400).json({ status: false, message: 'Ese username ya existe' });
+        updates.username = username;
+    }
+    if (password) {
+        if (password.length < PASSWORD_MIN_LENGTH || password.length > 128) return res.status(400).json({ status: false, message: 'La contraseña debe tener entre 8 y 128 caracteres' });
+        updates.password = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    }
 
     if (Object.keys(updates).length === 0) {
         return res.status(400).json({ status: false, message: 'No enviaste ningún cambio' });
@@ -131,17 +135,17 @@ router.get('/stats', async (req, res) => {
 });
 
 router.post('/redeem', async (req, res) => {
-    const { apiKey, code } = req.body;
-    if (!apiKey || !code) {
-        return res.status(400).json({ status: false, message: 'Faltan datos: apiKey, code' });
+    const { apiKey } = req.body;
+    const code = typeof req.body.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    if (!validText(apiKey, 16, 200) || !validText(code, 3, 100)) {
+        return res.status(400).json({ status: false, message: 'Datos inválidos' });
     }
 
     const user = await db.findUser('key', apiKey);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
-    const normalized = code.trim().toUpperCase();
     const codes = await db.getCodes();
-    const found = codes.find(c => c.code === normalized);
+    const found = codes.find(c => c.code === code);
 
     if (!found) return res.status(404).json({ status: false, message: 'Código no válido' });
     if (!found.active) return res.status(400).json({ status: false, message: 'Este código ya no está activo' });
@@ -163,21 +167,24 @@ router.post('/redeem', async (req, res) => {
     });
 });
 
-router.post('/admin/create-code', requireAdmin, async (req, res) => {
-    const { code, requests, maxUses } = req.body;
+router.post('/admin/create-code', async (req, res) => {
+    const code = typeof req.body.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    const requests = Number(req.body.requests);
+    const maxUses = Number(req.body.maxUses);
 
-    if (!code || !requests || !maxUses) return res.status(400).json({ status: false, message: 'Faltan datos' });
+    if (!validText(code, 3, 100) || !Number.isInteger(requests) || requests < 1 || requests > 100000 || !Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100000) {
+        return res.status(400).json({ status: false, message: 'Datos inválidos' });
+    }
 
-    const normalized = code.trim().toUpperCase();
     const codes = await db.getCodes();
-    if (codes.find(c => c.code === normalized)) {
+    if (codes.find(c => c.code === code)) {
         return res.status(400).json({ status: false, message: 'Ese código ya existe' });
     }
 
     codes.push({
-        code: normalized,
-        requests: parseInt(requests),
-        maxUses: parseInt(maxUses),
+        code,
+        requests,
+        maxUses,
         uses: 0,
         usedBy: [],
         active: true,
@@ -185,10 +192,10 @@ router.post('/admin/create-code', requireAdmin, async (req, res) => {
     });
     await db.saveCodes(codes);
 
-    res.json({ status: true, message: 'Código creado', code: normalized });
+    res.json({ status: true, message: 'Código creado', code });
 });
 
-router.get('/admin/all', requireAdmin, async (req, res) => {
+router.get('/admin/all', async (req, res) => {
     const allUsers = await db.getUsers();
     const users = allUsers.map(({ password, ...safe }) => safe);
     const codes = await db.getCodes();
@@ -202,36 +209,44 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
     });
 });
 
-router.post('/admin/set-role', requireAdmin, async (req, res) => {
-    const { email, plan, limit } = req.body;
+router.post('/admin/set-role', async (req, res) => {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const plan = typeof req.body.plan === 'string' ? req.body.plan.trim() : '';
+    const limit = req.body.limit === undefined ? undefined : Number(req.body.limit);
+
+    if (!EMAIL_REGEX.test(email) || email.length > 150) return res.status(400).json({ status: false, message: 'Email inválido' });
+    if (plan && !validText(plan, 1, 50)) return res.status(400).json({ status: false, message: 'Plan inválido' });
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0 || limit > 1000000)) return res.status(400).json({ status: false, message: 'Límite inválido' });
 
     const user = await db.findUser('email', email);
     if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
 
     const updates = {};
     if (plan) updates.plan = plan;
-    if (limit) updates.limit = parseInt(limit);
-    await db.updateUserBy('id', user.id, updates);
+    if (limit !== undefined) updates.limit = limit;
+    if (Object.keys(updates).length === 0) return res.status(400).json({ status: false, message: 'No enviaste cambios' });
 
+    await db.updateUserBy('id', user.id, updates);
     res.json({ status: true, message: 'Usuario actualizado' });
 });
 
-router.post('/admin/delete', requireAdmin, async (req, res) => {
-    const { email } = req.body;
+router.post('/admin/delete', async (req, res) => {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!EMAIL_REGEX.test(email) || email.length > 150) return res.status(400).json({ status: false, message: 'Email inválido' });
 
     const allUsers = await db.getUsers();
-    const users = allUsers.filter(u => u.email !== email);
+    const users = allUsers.filter(u => u.email.toLowerCase() !== email);
+    if (users.length === allUsers.length) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
     await db.saveUsers(users);
     res.json({ status: true, message: 'Usuario eliminado' });
 });
 
-router.post('/admin/delete-code', requireAdmin, async (req, res) => {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ status: false, message: 'Falta el código' });
+router.post('/admin/delete-code', async (req, res) => {
+    const code = typeof req.body.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    if (!validText(code, 3, 100)) return res.status(400).json({ status: false, message: 'Código inválido' });
 
-    const normalized = code.trim().toUpperCase();
     const codes = await db.getCodes();
-    const filtered = codes.filter(c => c.code !== normalized);
+    const filtered = codes.filter(c => c.code !== code);
 
     if (filtered.length === codes.length) {
         return res.status(404).json({ status: false, message: 'Código no encontrado' });
