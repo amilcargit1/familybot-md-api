@@ -10,17 +10,20 @@ const PORT = process.env.PORT || 3000;
 global.startTime = Date.now();
 
 const { authHandler } = require('./middlewares/auth');
+const { statsMiddleware } = require('./middlewares/stats');
 const loadRoutes = require('./utils/loadRoutes');
 
-// Render está detrás de un proxy; sin esto, todas las IPs se verían iguales
-// y el límite por IP no funcionaría correctamente.
+// Render está detrás de un proxy; sin esto, todas las IPs se verían iguales.
 app.set('trust proxy', 1);
 
 app.use(compression());
 app.use(express.json());
 
+// ---- Métricas automáticas de la API ----
+// Se registra antes de las rutas para medir también errores y respuestas 4xx/5xx.
+app.use('/api/', statsMiddleware);
+
 // ---- Motor visual FamilyBot-MD ----
-// Inyecta el motor de partículas en las páginas HTML sin modificar cada archivo.
 const publicDir = path.join(__dirname, 'public');
 const particleScript = `\n<script src="/assets_particles.js"></script>\n<script>\n(function () {\n    function startParticles() {\n        if (!window.FamilyBotParticles) return;\n        const theme = localStorage.getItem('familybot_particle_theme') || 'fantasia';\n        const intensity = localStorage.getItem('familybot_particle_intensity') || 'medium';\n        const enabled = localStorage.getItem('familybot_particle_enabled');\n        if (enabled !== 'false') {\n            window.FamilyBotParticles.start(theme, intensity);\n        }\n    }\n    if (document.readyState === 'loading') {\n        document.addEventListener('DOMContentLoaded', startParticles, { once: true });\n    } else {\n        startParticles();\n    }\n})();\n</script>\n`;
 
@@ -35,10 +38,7 @@ function sendPage(res, fileName) {
     });
 }
 
-// La raíz se sirve mediante sendPage para que también tenga los efectos.
 app.get('/', (req, res) => sendPage(res, 'index.html'));
-
-// Archivos estáticos: CSS, JS, imágenes, etc.
 app.use(express.static(publicDir));
 
 // ---- Límite de solicitudes por IP ----
