@@ -1,0 +1,7 @@
+const express = require('express');
+const { generateExtraCanvas } = require('../../services/extraCanvas.service');
+const router = express.Router();
+const p=(req,n,f='')=>req.body?.[n]??req.query?.[n]??f;
+router.get('/', async (req,res)=>{try{const image=await generateExtraCanvas('birthday',{username:p(req,'username','Usuario'),second:p(req,'message','Feliz cumpleaños'),value:p(req,'age','Felicidades'),detail:p(req,'detail','Que tengas un gran día'),footer:p(req,'footer','FamilyBot-MD')});if(String(req.query.format).toLowerCase()==='image'||String(req.headers.accept||'').includes('image/png'))return res.type('png').send(image);return res.json({status:true,creator:'FamilyBot-MD',result:{url:`data:image/png;base64,${image.toString('base64')}`,format:'png'}});}catch(e){res.status(500).json({status:false,creator:'FamilyBot-MD',message:'No se pudo generar el Birthday Canvas.'});}});
+router.meta={title:'Birthday Canvas',description:'Tarjeta de cumpleaños.',icon:'fas fa-birthday-cake',method:'GET',fields:[{name:'username',label:'Usuario',type:'text',placeholder:'Nombre'},{name:'message',label:'Mensaje',type:'text',placeholder:'Feliz cumpleaños'},{name:'age',label:'Dato',type:'text',placeholder:'Felicidades'},{name:'detail',label:'Detalle',type:'text',placeholder:'Que tengas un gran día'}],resultType:'image',resultField:'result.url',directImage:true};
+module.exports=router;
