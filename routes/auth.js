@@ -5,6 +5,7 @@ const db = require('../db');
 const ADMIN = require('../utils/adminConfig');
 const { requireAdmin } = require('../middlewares/requireAdmin');
 const authService = require('../services/auth.service');
+const statsService = require('../services/stats.service');
 const bcrypt = require('bcryptjs');
 
 // Registro
@@ -18,9 +19,7 @@ router.post('/register', async (req, res, next) => {
         }
         const data = await authService.register({ username, email, password });
         res.json({ status: true, message: 'Registro exitoso', key: data.key });
-    } catch (err) {
-        next(err);
-    }
+    } catch (err) { next(err); }
 });
 
 // Login
@@ -34,9 +33,7 @@ router.post('/login', async (req, res, next) => {
         }
         const data = await authService.login({ email, password });
         res.json({ status: true, data });
-    } catch (err) {
-        next(err);
-    }
+    } catch (err) { next(err); }
 });
 
 // Mi perfil
@@ -71,12 +68,8 @@ router.post('/update-profile', async (req, res, next) => {
 // Estadísticas globales
 router.get('/stats', async (req, res, next) => {
     try {
-        const [users, stats] = await Promise.all([db.countUsers(), db.getStats({ days: 7 })]);
-        const endpointRequests = Object.entries(stats.endpointRequests).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([endpoint, requests]) => ({ endpoint, requests }));
-        const avgResponseTimeMs = stats.totalRequests > 0 ? Math.round(stats.totalResponseTimeMs / stats.totalRequests) : 0;
-        const successRate = stats.totalRequests > 0 ? Number(((stats.successfulRequests / stats.totalRequests) * 100).toFixed(2)) : 100;
-        const daily = Object.entries(stats.daily).map(([date, value]) => ({ date, requests: value.totalRequests, successful: value.successfulRequests, failed: value.failedRequests, averageResponseTimeMs: value.totalRequests ? Math.round(value.totalResponseTimeMs / value.totalRequests) : 0 }));
-        res.json({ status: true, generatedAt: new Date().toISOString(), users, endpoints: Array.isArray(req.app.locals.apiEndpoints) ? req.app.locals.apiEndpoints.length : 0, requests: { total: stats.totalRequests, successful: stats.successfulRequests, failed: stats.failedRequests, successRate, averageResponseTimeMs: avgResponseTimeMs }, topEndpoints: endpointRequests, daily, recentRequests: stats.recentRequests, storage: db.isPersistent ? 'redis' : 'local' });
+        const data = await statsService.getDashboardStats(req.app.locals.apiEndpoints);
+        res.json(data);
     } catch (err) { next(err); }
 });
 
