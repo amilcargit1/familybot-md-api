@@ -20,20 +20,17 @@ app.use(compression());
 app.use(express.json());
 
 // ---- Métricas automáticas de la API ----
-// Se registra antes de las rutas para medir también errores y respuestas 4xx/5xx.
 app.use('/api/', statsMiddleware);
 
 // ---- Motor visual FamilyBot-MD ----
 const publicDir = path.join(__dirname, 'public');
-const particleScript = `\n<script src="/assets_particles.js"></script>\n<script>\n(function () {\n    function startParticles() {\n        if (!window.FamilyBotParticles) return;\n        const theme = localStorage.getItem('familybot_particle_theme') || 'fantasia';\n        const intensity = localStorage.getItem('familybot_particle_intensity') || 'medium';\n        const enabled = localStorage.getItem('familybot_particle_enabled');\n        if (enabled !== 'false') {\n            window.FamilyBotParticles.start(theme, intensity);\n        }\n    }\n    if (document.readyState === 'loading') {\n        document.addEventListener('DOMContentLoaded', startParticles, { once: true });\n    } else {\n        startParticles();\n    }\n})();\n</script>\n`;
+const particleScript = `\n<script src="/assets_particles.js"></script>\n<script>\n(function () {\n    function startParticles() {\n        if (!window.FamilyBotParticles) return;\n        const theme = localStorage.getItem('familybot_particle_theme') || 'fantasia';\n        const intensity = localStorage.getItem('familybot_particle_intensity') || 'medium';\n        const enabled = localStorage.getItem('familybot_particle_enabled');\n        if (enabled !== 'false') window.FamilyBotParticles.start(theme, intensity);\n    }\n    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startParticles, { once: true });\n    else startParticles();\n})();\n</script>\n<script src="/metrics.js"></script>\n`;
 
 function sendPage(res, fileName) {
     const filePath = path.join(publicDir, fileName);
     fs.readFile(filePath, 'utf8', (err, html) => {
         if (err) return res.status(500).send('No se pudo cargar la página.');
-        if (!html.includes('/assets_particles.js')) {
-            html = html.replace('</body>', `${particleScript}</body>`);
-        }
+        if (!html.includes('/assets_particles.js')) html = html.replace('</body>', `${particleScript}</body>`);
         res.type('html').send(html);
     });
 }
@@ -77,9 +74,7 @@ loadRoutes(app, authHandler);
 
 // ---- 404 ----
 app.use((req, res) => {
-    if (req.path.startsWith('/api/')) {
-        return res.status(404).json({ status: false, message: 'Ruta no encontrada' });
-    }
+    if (req.path.startsWith('/api/')) return res.status(404).json({ status: false, message: 'Ruta no encontrada' });
     res.status(404).send('<h1 style="font-family:sans-serif;color:#fff;background:#0a0b0e;padding:40px">Esta página todavía no existe. <a href="/" style="color:#ec4899">Volver al inicio</a></h1>');
 });
 
@@ -89,6 +84,4 @@ app.use((err, req, res, next) => {
     res.status(500).json({ status: false, message: err.message || 'Error interno del servidor' });
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 FamilyBot-MD API escuchando en el puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 FamilyBot-MD API escuchando en el puerto ${PORT}`));
