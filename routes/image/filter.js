@@ -84,7 +84,8 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const output = await applyFilter(req.file.buffer, filter, req.body.intensity)
+        const filteredImage = await applyFilter(req.file.buffer, filter, req.body.intensity);
+        const output = await filteredImage
             .jpeg({ quality: 88, mozjpeg: true })
             .toBuffer();
 
@@ -96,8 +97,6 @@ router.post('/', upload.single('image'), async (req, res) => {
             });
         }
 
-        // JSON por defecto para que el Dashboard pueda mostrar el resultado.
-        // ?format=image devuelve directamente el JPEG para clientes que lo necesiten.
         if (String(req.query.format).toLowerCase() === 'image') {
             return res.status(200)
                 .type('jpg')
