@@ -2,108 +2,93 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db');
-const ADMIN = require('../utils/adminConfig');
 const { requireAdmin } = require('../middlewares/requireAdmin');
 const authService = require('../services/auth.service');
 const statsService = require('../services/stats.service');
 const bcrypt = require('bcryptjs');
+const { success, failure } = require('../utils/response');
+const { required, string } = require('../utils/validation');
 
-// Registro
 router.post('/register', async (req, res, next) => {
     try {
-        const { username, email, password } = req.body;
-        if (!username || !email || !password) {
-            const error = new Error('Faltan datos: username, email, password');
-            error.statusCode = 400;
-            throw error;
-        }
+        required(req.body, ['username', 'email', 'password']);
+        const username = string(req.body.username, 'username', { min: 2, max: 50 });
+        const email = string(req.body.email, 'email', { min: 3, max: 254 }).toLowerCase();
+        const password = string(req.body.password, 'password', { min: 6, max: 128 });
         const data = await authService.register({ username, email, password });
-        res.json({ status: true, message: 'Registro exitoso', key: data.key });
+        return res.json({ status: true, message: 'Registro exitoso', key: data.key });
     } catch (err) { next(err); }
 });
 
-// Login
 router.post('/login', async (req, res, next) => {
     try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            const error = new Error('Faltan datos: email, password');
-            error.statusCode = 400;
-            throw error;
-        }
+        required(req.body, ['email', 'password']);
+        const email = string(req.body.email, 'email', { min: 3, max: 254 }).toLowerCase();
+        const password = string(req.body.password, 'password', { min: 6, max: 128 });
         const data = await authService.login({ email, password });
-        res.json({ status: true, data });
+        return res.json({ status: true, data });
     } catch (err) { next(err); }
 });
 
-// Mi perfil
 router.get('/me', async (req, res, next) => {
     try {
-        const { apiKey } = req.query;
-        if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
+        const apiKey = string(req.query.apiKey, 'apiKey', { min: 1, max: 512 });
         const user = await db.findUser('key', apiKey);
-        if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
+        if (!user) return failure(res, 'Usuario no encontrado', 404);
         const today = new Date().toISOString().split('T')[0];
         const requestToday = user.lastRequestDate === today ? user.requestToday : 0;
-        res.json({ status: true, data: { username: user.username, email: user.email, plan: user.plan, requests: { today: requestToday, total: user.totalRequest || 0, limit: user.limit || 100, remaining: (user.limit || 100) - requestToday } } });
+        return success(res, { username: user.username, email: user.email, plan: user.plan, requests: { today: requestToday, total: user.totalRequest || 0, limit: user.limit || 100, remaining: (user.limit || 100) - requestToday } });
     } catch (err) { next(err); }
 });
 
-// Actualizar perfil
 router.post('/update-profile', async (req, res, next) => {
     try {
-        const { apiKey, username, password } = req.body;
-        if (!apiKey) return res.status(400).json({ status: false, message: 'ApiKey requerida' });
+        required(req.body, ['apiKey']);
+        const apiKey = string(req.body.apiKey, 'apiKey', { min: 1, max: 512 });
         const user = await db.findUser('key', apiKey);
-        if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
+        if (!user) return failure(res, 'Usuario no encontrado', 404);
         const updates = {};
-        if (username && username.trim()) updates.username = username.trim();
-        if (password && password.trim()) updates.password = await bcrypt.hash(password.trim(), 10);
-        if (!Object.keys(updates).length) return res.status(400).json({ status: false, message: 'No enviaste ningún cambio' });
+        if (req.body.username?.trim()) updates.username = string(req.body.username, 'username', { min: 2, max: 50 });
+        if (req.body.password?.trim()) updates.password = await bcrypt.hash(string(req.body.password, 'password', { min: 6, max: 128 }), 10);
+        if (!Object.keys(updates).length) return failure(res, 'No enviaste ningún cambio');
         await db.updateUserBy('id', user.id, updates);
-        res.json({ status: true, message: 'Perfil actualizado correctamente' });
+        return success(res, undefined, 'Perfil actualizado correctamente');
     } catch (err) { next(err); }
 });
 
-// Estadísticas globales
 router.get('/stats', async (req, res, next) => {
-    try {
-        const data = await statsService.getDashboardStats(req.app.locals.apiEndpoints);
-        res.json(data);
-    } catch (err) { next(err); }
+    try { return res.json(await statsService.getDashboardStats(req.app.locals.apiEndpoints)); }
+    catch (err) { next(err); }
 });
 
-// Canjear código
 router.post('/redeem', async (req, res, next) => {
     try {
-        const { apiKey, code } = req.body;
-        if (!apiKey || !code) return res.status(400).json({ status: false, message: 'Faltan datos: apiKey, code' });
+        required(req.body, ['apiKey', 'code']);
+        const apiKey = string(req.body.apiKey, 'apiKey', { min: 1, max: 512 });
+        const code = string(req.body.code, 'code', { min: 1, max: 100 }).toUpperCase();
         const user = await db.findUser('key', apiKey);
-        if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
-        const normalized = code.trim().toUpperCase();
+        if (!user) return failure(res, 'Usuario no encontrado', 404);
         const codes = await db.getCodes();
-        const found = codes.find(c => c.code === normalized);
-        if (!found) return res.status(404).json({ status: false, message: 'Código no válido' });
-        if (!found.active) return res.status(400).json({ status: false, message: 'Este código ya no está activo' });
-        if (found.uses >= found.maxUses) return res.status(400).json({ status: false, message: 'Este código ya alcanzó su límite de usos' });
-        if (found.usedBy.includes(user.email)) return res.status(400).json({ status: false, message: 'Ya canjeaste este código antes' });
+        const found = codes.find(c => c.code === code);
+        if (!found) return failure(res, 'Código no válido', 404);
+        if (!found.active) return failure(res, 'Este código ya no está activo');
+        if (found.uses >= found.maxUses) return failure(res, 'Este código ya alcanzó su límite de usos');
+        if (found.usedBy.includes(user.email)) return failure(res, 'Ya canjeaste este código antes');
         const newLimit = (user.limit || 100) + found.requests;
         await db.updateUserBy('id', user.id, { limit: newLimit });
         found.uses += 1;
         found.usedBy.push(user.email);
         if (found.uses >= found.maxUses) found.active = false;
         await db.saveCodes(codes);
-        res.json({ status: true, message: `¡Código canjeado! +${found.requests} solicitudes agregadas`, new_limit: newLimit });
+        return success(res, { new_limit: newLimit }, `¡Código canjeado! +${found.requests} solicitudes agregadas`);
     } catch (err) { next(err); }
 });
 
-// Recuperación de contraseña
 router.post('/forgot-password', async (req, res, next) => {
     try {
-        const { email } = req.body;
-        if (!email) return res.status(400).json({ status: false, message: 'Falta el correo' });
+        const email = string(req.body?.email, 'email', { min: 3, max: 254 }).toLowerCase();
         const user = await db.findUser('email', email);
-        if (!user) return res.json({ status: true, message: 'Si ese correo tiene una cuenta, se envió un link de recuperación.' });
+        if (!user) return success(res, undefined, 'Si ese correo tiene una cuenta, se envió un link de recuperación.');
         const token = crypto.randomBytes(24).toString('hex');
         const expires = Date.now() + 15 * 60 * 1000;
         await db.updateUserBy('id', user.id, { resetToken: token, resetExpires: expires });
@@ -116,22 +101,21 @@ router.post('/forgot-password', async (req, res, next) => {
                 emailSent = emailRes.ok;
             } catch (err) { console.error('Error enviando correo de recuperación:', err.message); }
         }
-        res.json({ status: true, message: emailSent ? 'Te enviamos un correo con el link de recuperación.' : 'No se pudo enviar el correo automático (o no está configurado). Usa este link directo:', reset_link: emailSent ? undefined : resetUrl });
+        return res.json({ status: true, message: emailSent ? 'Te enviamos un correo con el link de recuperación.' : 'No se pudo enviar el correo automático (o no está configurado). Usa este link directo:', reset_link: emailSent ? undefined : resetUrl });
     } catch (err) { next(err); }
 });
 
 router.post('/reset-password', async (req, res, next) => {
     try {
-        const { token, newPassword } = req.body;
-        if (!token || !newPassword) return res.status(400).json({ status: false, message: 'Faltan datos' });
-        if (newPassword.length < 6) return res.status(400).json({ status: false, message: 'La contraseña debe tener al menos 6 caracteres' });
+        required(req.body, ['token', 'newPassword']);
+        const token = string(req.body.token, 'token', { min: 1, max: 256 });
+        const newPassword = string(req.body.newPassword, 'newPassword', { min: 6, max: 128 });
         const users = await db.getUsers();
         const user = users.find(u => u.resetToken === token);
-        if (!user) return res.status(400).json({ status: false, message: 'Link inválido o ya usado' });
-        if (!user.resetExpires || Date.now() > user.resetExpires) return res.status(400).json({ status: false, message: 'Este link expiró. Solicita uno nuevo desde "Olvidé mi contraseña".' });
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await db.updateUserBy('id', user.id, { password: hashedPassword, resetToken: null, resetExpires: null });
-        res.json({ status: true, message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
+        if (!user) return failure(res, 'Link inválido o ya usado');
+        if (!user.resetExpires || Date.now() > user.resetExpires) return failure(res, 'Este link expiró. Solicita uno nuevo desde "Olvidé mi contraseña".');
+        await db.updateUserBy('id', user.id, { password: await bcrypt.hash(newPassword, 10), resetToken: null, resetExpires: null });
+        return success(res, undefined, 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
     } catch (err) { next(err); }
 });
 
@@ -139,21 +123,21 @@ router.get('/leaderboard', async (req, res, next) => {
     try {
         const users = await db.getUsers();
         const top = users.filter(u => (u.totalRequest || 0) > 0).sort((a, b) => (b.totalRequest || 0) - (a.totalRequest || 0)).slice(0, 5).map(u => ({ username: u.username, totalRequest: u.totalRequest || 0 }));
-        res.json({ status: true, leaderboard: top });
+        return success(res, top, 'OK');
     } catch (err) { next(err); }
 });
 
-// Admin
 router.post('/admin/create-code', requireAdmin, async (req, res, next) => {
     try {
-        const { code, requests, maxUses } = req.body;
-        if (!code || !requests || !maxUses) return res.status(400).json({ status: false, message: 'Faltan datos' });
-        const normalized = code.trim().toUpperCase();
+        required(req.body, ['code', 'requests', 'maxUses']);
+        const normalized = string(req.body.code, 'code', { min: 1, max: 100 }).toUpperCase();
+        const requests = Number(req.body.requests), maxUses = Number(req.body.maxUses);
+        if (!Number.isSafeInteger(requests) || requests < 1 || !Number.isSafeInteger(maxUses) || maxUses < 1) return failure(res, 'requests y maxUses deben ser enteros positivos');
         const codes = await db.getCodes();
-        if (codes.find(c => c.code === normalized)) return res.status(400).json({ status: false, message: 'Ese código ya existe' });
-        codes.push({ code: normalized, requests: parseInt(requests), maxUses: parseInt(maxUses), uses: 0, usedBy: [], active: true, createdAt: new Date().toISOString() });
+        if (codes.find(c => c.code === normalized)) return failure(res, 'Ese código ya existe');
+        codes.push({ code: normalized, requests, maxUses, uses: 0, usedBy: [], active: true, createdAt: new Date().toISOString() });
         await db.saveCodes(codes);
-        res.json({ status: true, message: 'Código creado', code: normalized });
+        return success(res, { code: normalized }, 'Código creado');
     } catch (err) { next(err); }
 });
 
@@ -162,42 +146,44 @@ router.get('/admin/all', requireAdmin, async (req, res, next) => {
         const allUsers = await db.getUsers();
         const users = allUsers.map(({ password, resetToken, ...safe }) => safe);
         const codes = await db.getCodes();
-        res.json({ status: true, totalUsers: users.length, totalCodes: codes.filter(c => c.active).length, users, codes });
+        return res.json({ status: true, totalUsers: users.length, totalCodes: codes.filter(c => c.active).length, users, codes });
     } catch (err) { next(err); }
 });
 
 router.post('/admin/set-role', requireAdmin, async (req, res, next) => {
     try {
-        const { email, plan, limit } = req.body;
+        const email = string(req.body?.email, 'email', { min: 3, max: 254 }).toLowerCase();
         const user = await db.findUser('email', email);
-        if (!user) return res.status(404).json({ status: false, message: 'Usuario no encontrado' });
+        if (!user) return failure(res, 'Usuario no encontrado', 404);
         const updates = {};
-        if (plan) updates.plan = plan;
-        if (limit) updates.limit = parseInt(limit);
+        if (req.body.plan) updates.plan = string(req.body.plan, 'plan', { min: 1, max: 50 });
+        if (req.body.limit !== undefined) {
+            const limit = Number(req.body.limit);
+            if (!Number.isSafeInteger(limit) || limit < 1) return failure(res, 'limit debe ser un entero positivo');
+            updates.limit = limit;
+        }
         await db.updateUserBy('id', user.id, updates);
-        res.json({ status: true, message: 'Usuario actualizado' });
+        return success(res, undefined, 'Usuario actualizado');
     } catch (err) { next(err); }
 });
 
 router.post('/admin/delete', requireAdmin, async (req, res, next) => {
     try {
-        const { email } = req.body;
+        const email = string(req.body?.email, 'email', { min: 3, max: 254 }).toLowerCase();
         const allUsers = await db.getUsers();
         await db.saveUsers(allUsers.filter(u => u.email !== email));
-        res.json({ status: true, message: 'Usuario eliminado' });
+        return success(res, undefined, 'Usuario eliminado');
     } catch (err) { next(err); }
 });
 
 router.post('/admin/delete-code', requireAdmin, async (req, res, next) => {
     try {
-        const { code } = req.body;
-        if (!code) return res.status(400).json({ status: false, message: 'Falta el código' });
-        const normalized = code.trim().toUpperCase();
+        const normalized = string(req.body?.code, 'code', { min: 1, max: 100 }).toUpperCase();
         const codes = await db.getCodes();
         const filtered = codes.filter(c => c.code !== normalized);
-        if (filtered.length === codes.length) return res.status(404).json({ status: false, message: 'Código no encontrado' });
+        if (filtered.length === codes.length) return failure(res, 'Código no encontrado', 404);
         await db.saveCodes(filtered);
-        res.json({ status: true, message: 'Código eliminado' });
+        return success(res, undefined, 'Código eliminado');
     } catch (err) { next(err); }
 });
 
