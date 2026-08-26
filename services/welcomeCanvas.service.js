@@ -94,6 +94,7 @@ function textSvg(theme, data) {
     const username = cleanText(data.username, 'Nuevo miembro', 34);
     const group = cleanText(data.groupName, 'Nuestro grupo', 40);
     const members = cleanText(data.members, '0', 12);
+    const membersLabel = cleanText(data.membersLabel, 'MIEMBROS', 16);
     const date = cleanText(data.date, new Date().toLocaleDateString('es-PE'), 24);
     const footer = cleanText(data.footer, '✦ FamilyBot-MD ✦', 30);
 
@@ -104,7 +105,7 @@ function textSvg(theme, data) {
 <text x="600" y="164" text-anchor="middle" fill="${theme.muted}" font-size="18" class="small">${subtitle}</text>
 <text x="780" y="315" fill="${theme.text}" font-size="52" class="name">${username}</text>
 <text x="780" y="356" fill="${theme.muted}" font-size="23" class="body">${group}</text>
-<text x="780" y="410" fill="${theme.text}" font-size="21" class="body">MIEMBROS: ${members}</text>
+<text x="780" y="410" fill="${theme.text}" font-size="21" class="body">${membersLabel}: ${members}</text>
 <text x="780" y="450" fill="${theme.muted}" font-size="18" class="small">${date}</text>
 <text x="780" y="490" fill="${theme.accent}" font-size="20" class="body">${footer}</text>
 </svg>`);
