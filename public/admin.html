@@ -6,362 +6,47 @@
 <title>FamilyBot-MD · Panel Admin</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <style>
-    :root {
-        --bg-primary: #060708;
-        --bg-card: #101216;
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --pink: #ec4899;
-        --cyan: #22d3ee;
-        --border-color: rgba(255,255,255,0.07);
-        --header-bg: #0a0b0e;
-        --radius: 18px;
-    }
-    :root[data-theme="light"] {
-        --bg-primary: #f3f4f8;
-        --bg-card: #ffffff;
-        --text-primary: #1a1d29;
-        --text-secondary: #64748b;
-        --border-color: rgba(15,23,42,0.08);
-        --header-bg: #ffffff;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; min-height: 100vh; transition: background 0.3s ease, color 0.3s ease; }
-    header {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 20px; background: var(--header-bg); border-bottom: 1px solid var(--border-color);
-        transition: background 0.3s ease, border-color 0.3s ease;
-    }
-    header h1 { font-size: 1.3rem; font-weight: 800; }
-    header h1 span { color: var(--pink); }
-    .header-actions { display: flex; gap: 8px; }
-    .theme-btn { background: var(--surface-alt, rgba(255,255,255,0.08)); border: 1px solid var(--border-color); color: var(--text-primary); width: 40px; height: 40px; border-radius: 12px; cursor: pointer; font-size: 1rem; }
-    .back-btn { background: rgba(255,255,255,0.08); border: none; color: var(--text-primary); padding: 10px 16px; border-radius: 12px; font-size: 0.85rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-
-    main { max-width: 800px; margin: 0 auto; padding: 20px 16px 60px; }
-
-    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
-    .stat-card {
-        background: var(--bg-card);
-        border-radius: var(--radius);
-        padding: 18px;
-        border-left: 3px solid var(--pink);
-    }
-    .stat-card.cyan { border-left-color: var(--cyan); }
-    .stat-card .lbl { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .stat-card .num { font-size: 2.2rem; font-weight: 800; line-height: 1; }
-    .stat-card .sub { font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); margin-top: 2px; }
-
-    .tabs { display: flex; gap: 10px; margin-bottom: 12px; }
-    .tab-btn {
-        flex: 1;
-        background: var(--bg-card);
-        border: 1px solid rgba(236,72,153,0.3);
-        color: var(--pink);
-        padding: 12px;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 0.85rem;
-        cursor: pointer;
-    }
-    .tab-btn.inactive { border-color: rgba(255,255,255,0.08); color: var(--text-secondary); }
-
-    .filter-row { display: flex; gap: 8px; margin-bottom: 16px; }
-    .filter-btn {
-        flex: 1;
-        background: var(--bg-card);
-        border: 1px solid rgba(236,72,153,0.3);
-        color: var(--pink);
-        padding: 10px;
-        border-radius: 10px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        cursor: pointer;
-    }
-    .filter-btn.inactive { border-color: rgba(255,255,255,0.06); color: var(--text-secondary); }
-
-    .table-card { background: var(--bg-card); border-radius: var(--radius); overflow: hidden; }
-    .user-row {
-        display: grid;
-        grid-template-columns: 1.6fr 1fr 1fr 1fr;
-        gap: 8px;
-        padding: 14px 12px;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-        font-size: 0.75rem;
-        align-items: center;
-    }
-    .user-row.header-row {
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-size: 0.65rem;
-        background: rgba(255,255,255,0.02);
-    }
-    .user-row .user-cell strong { display: block; font-size: 0.85rem; }
-    .user-row .user-cell span { color: var(--text-secondary); font-size: 0.7rem; }
-    .rank-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
-    .rank-badge.free { background: rgba(148,163,184,0.15); color: var(--text-secondary); }
-    .rank-badge.premium { background: rgba(236,72,153,0.15); color: var(--pink); }
-    .rank-badge.admin { background: rgba(34,211,238,0.15); color: var(--cyan); }
-    .mgmt-btn {
-        background: rgba(255,255,255,0.06);
-        border: none;
-        color: var(--text-primary);
-        padding: 5px 8px;
-        border-radius: 6px;
-        font-size: 0.7rem;
-        cursor: pointer;
-        margin-right: 4px;
-    }
-    .mgmt-btn.danger { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .empty-state { padding: 40px 20px; text-align: center; color: var(--text-secondary); font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; }
-
-    .codes-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .codes-form input {
-        background: var(--bg-card); border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 10px; padding: 10px 12px; color: var(--text-primary); font-size: 0.85rem; outline: none;
-    }
-    .codes-form input#newCodeName { flex: 2; text-transform: uppercase; }
-    .codes-form input#newCodeRequests, .codes-form input#newCodeUses { flex: 1; }
-    .codes-form button { background: var(--pink); border: none; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
-
-    #accessDenied { text-align: center; padding: 80px 20px; }
-    #accessDenied i { font-size: 3rem; color: #ef4444; margin-bottom: 16px; }
+    :root{--bg-primary:#060708;--bg-card:#101216;--text-primary:#f1f5f9;--text-secondary:#94a3b8;--pink:#ec4899;--cyan:#22d3ee;--border-color:rgba(255,255,255,.07);--header-bg:#0a0b0e;--radius:18px}
+    :root[data-theme="light"]{--bg-primary:#f3f4f8;--bg-card:#fff;--text-primary:#1a1d29;--text-secondary:#64748b;--border-color:rgba(15,23,42,.08);--header-bg:#fff}
+    *{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg-primary);color:var(--text-primary);font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;min-height:100vh;transition:.3s}
+    header{display:flex;justify-content:space-between;align-items:center;padding:20px;background:var(--header-bg);border-bottom:1px solid var(--border-color)}header h1{font-size:1.3rem;font-weight:800}header h1 span{color:var(--pink)}.header-actions{display:flex;gap:8px}
+    .theme-btn,.back-btn,.tab-btn,.filter-btn,.mgmt-btn,.codes-form button,.refresh-btn{cursor:pointer}.theme-btn{background:rgba(255,255,255,.08);border:1px solid var(--border-color);color:var(--text-primary);width:40px;height:40px;border-radius:12px}.back-btn{background:rgba(255,255,255,.08);border:none;color:var(--text-primary);padding:10px 16px;border-radius:12px;font-size:.85rem;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+    main{max-width:900px;margin:0 auto;padding:20px 16px 60px}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.stat-card{background:var(--bg-card);border-radius:var(--radius);padding:18px;border-left:3px solid var(--pink)}.stat-card.cyan{border-left-color:var(--cyan)}.stat-card.green{border-left-color:#22c55e}.stat-card.red{border-left-color:#ef4444}.stat-card .lbl{font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}.stat-card .num{font-size:2rem;font-weight:800;line-height:1}.stat-card .sub{font-size:.8rem;font-weight:700;color:var(--text-secondary);margin-top:5px}
+    .tabs{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}.tab-btn{flex:1;min-width:120px;background:var(--bg-card);border:1px solid rgba(236,72,153,.3);color:var(--pink);padding:12px;border-radius:12px;font-weight:700;font-size:.85rem}.tab-btn.inactive{border-color:rgba(255,255,255,.08);color:var(--text-secondary)}
+    .filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}.filter-btn{flex:1;min-width:90px;background:var(--bg-card);border:1px solid rgba(236,72,153,.3);color:var(--pink);padding:10px;border-radius:10px;font-size:.75rem;font-weight:700}.filter-btn.inactive{border-color:rgba(255,255,255,.06);color:var(--text-secondary)}
+    .table-card{background:var(--bg-card);border-radius:var(--radius);overflow:hidden}.user-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px;padding:14px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:.75rem;align-items:center}.user-row.header-row{color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;font-size:.65rem;background:rgba(255,255,255,.02)}.user-row .user-cell strong{display:block;font-size:.85rem}.user-row .user-cell span{color:var(--text-secondary);font-size:.7rem}.rank-badge,.status-badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:.65rem;font-weight:700;text-transform:uppercase}.rank-badge.free{background:rgba(148,163,184,.15);color:var(--text-secondary)}.rank-badge.premium{background:rgba(236,72,153,.15);color:var(--pink)}.rank-badge.admin{background:rgba(34,211,238,.15);color:var(--cyan)}.status-badge.ok{background:rgba(34,197,94,.15);color:#22c55e}.status-badge.partial{background:rgba(234,179,8,.15);color:#eab308}.status-badge.error{background:rgba(239,68,68,.15);color:#ef4444}.status-badge.neutral{background:rgba(148,163,184,.15);color:var(--text-secondary)}
+    .mgmt-btn{background:rgba(255,255,255,.06);border:none;color:var(--text-primary);padding:5px 8px;border-radius:6px;font-size:.7rem;margin-right:4px}.mgmt-btn.danger{background:rgba(239,68,68,.15);color:#ef4444}.empty-state{padding:40px 20px;text-align:center;color:var(--text-secondary);font-size:.85rem;letter-spacing:.05em;text-transform:uppercase}.codes-form{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}.codes-form input{background:var(--bg-card);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;color:var(--text-primary);font-size:.85rem;outline:none}.codes-form input#newCodeName{flex:2;text-transform:uppercase}.codes-form input#newCodeRequests,.codes-form input#newCodeUses{flex:1}.codes-form button,.refresh-btn{background:var(--pink);border:none;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;font-size:.8rem}.section-head{display:flex;justify-content:space-between;align-items:center;margin:12px 0}.section-head h2{font-size:1rem}.log-filters{display:flex;gap:8px;padding:12px;flex-wrap:wrap}.log-filters input{flex:1;min-width:120px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:8px;padding:9px;color:var(--text-primary)}.endpoint-row{grid-template-columns:1.5fr .6fr .8fr .8fr 1fr}.log-row{grid-template-columns:1fr .55fr 1.5fr .6fr .7fr}.error-text{color:#ef4444;font-size:.68rem}.time-text{color:var(--text-secondary)}
+    #accessDenied{text-align:center;padding:80px 20px}#accessDenied i{font-size:3rem;color:#ef4444;margin-bottom:16px}
+    @media(max-width:700px){.stat-grid{grid-template-columns:1fr 1fr}.endpoint-row,.log-row{grid-template-columns:1fr 1fr}.endpoint-row>div:nth-child(n+4),.log-row>div:nth-child(n+4){display:none}.user-row{grid-template-columns:1.5fr 1fr 1fr}.user-row>div:last-child{display:none}}
 </style>
 </head>
 <body>
-    <div id="accessDenied" style="display:none">
-        <i class="fas fa-lock"></i>
-        <h2>Acceso denegado</h2>
-        <p style="color:var(--text-secondary);margin-top:10px">Esta sección es solo para administradores.</p>
-        <a href="/dash" class="back-btn" style="margin-top:20px;display:inline-flex">Volver al Dashboard</a>
-    </div>
-
-    <div id="adminPanel" style="display:none">
-        <header>
-            <h1>FamilyBot-MD <span>STAFF</span></h1>
-            <div class="header-actions">
-                <button class="theme-btn" id="themeBtn"><i class="fas fa-moon"></i></button>
-                <a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a>
-            </div>
-        </header>
-
-        <main>
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="lbl">Base de datos</div>
-                    <div class="num" id="totalUsersNum">0</div>
-                    <div class="sub">Usuarios</div>
-                </div>
-                <div class="stat-card cyan">
-                    <div class="lbl">Códigos activos</div>
-                    <div class="num" id="totalCodesNum">0</div>
-                    <div class="sub">Códigos</div>
-                </div>
-            </div>
-
-            <div class="tabs">
-                <button class="tab-btn" id="tabUsers" onclick="switchTab('users')">👥 Usuarios</button>
-                <button class="tab-btn inactive" id="tabCodes" onclick="switchTab('codes')">🎁 Códigos</button>
-            </div>
-
-            <!-- ==== VISTA USUARIOS ==== -->
-            <div id="usersView">
-                <div class="filter-row">
-                    <button class="filter-btn" id="filterAll" onclick="setFilter('all')">TODOS</button>
-                    <button class="filter-btn inactive" id="filterPremium" onclick="setFilter('premium')">PREMIUMS</button>
-                    <button class="filter-btn inactive" id="filterAdmin" onclick="setFilter('admin')">ADMINS</button>
-                </div>
-
-                <div class="table-card">
-                    <div class="user-row header-row">
-                        <div>USUARIO / EMAIL</div>
-                        <div>RANGO</div>
-                        <div>CONSUMO</div>
-                        <div>GESTIÓN</div>
-                    </div>
-                    <div id="usersTableBody">
-                        <div class="empty-state">Cargando protocolos...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ==== VISTA CÓDIGOS ==== -->
-            <div id="codesView" style="display:none">
-                <div class="codes-form">
-                    <input type="text" id="newCodeName" placeholder="CÓDIGO">
-                    <input type="number" id="newCodeRequests" placeholder="+Solicitudes">
-                    <input type="number" id="newCodeUses" placeholder="Usos máx">
-                    <button onclick="createCode()">Crear</button>
-                </div>
-                <div class="table-card" id="codesTableBody">
-                    <div class="empty-state">Cargando códigos...</div>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <script>
-        const savedTheme = localStorage.getItem('familybot_theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        function updateThemeIcon() {
-            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-            document.getElementById('themeBtn').innerHTML = isLight ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-        }
-        updateThemeIcon();
-        document.getElementById('themeBtn').addEventListener('click', () => {
-            const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('familybot_theme', next);
-            updateThemeIcon();
-        });
-
-        const apiKey = localStorage.getItem('familybot_key');
-        const role = localStorage.getItem('familybot_role');
-
-        if (!apiKey || role !== 'admin') {
-            document.getElementById('accessDenied').style.display = 'block';
-        } else {
-            document.getElementById('adminPanel').style.display = 'block';
-            loadAdminData();
-        }
-
-        let allUsers = [];
-        let allCodes = [];
-        let currentFilter = 'all';
-
-        async function loadAdminData() {
-            try {
-                const res = await fetch(`/api/auth/admin/all?apiKey=${encodeURIComponent(apiKey)}`);
-                const data = await res.json();
-                if (!data.status) {
-                    document.getElementById('adminPanel').style.display = 'none';
-                    document.getElementById('accessDenied').style.display = 'block';
-                    return;
-                }
-                allUsers = data.users;
-                allCodes = data.codes;
-                document.getElementById('totalUsersNum').innerText = data.totalUsers;
-                document.getElementById('totalCodesNum').innerText = data.totalCodes;
-                renderUsers();
-                renderCodes();
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        function switchTab(tab) {
-            document.getElementById('tabUsers').classList.toggle('inactive', tab !== 'users');
-            document.getElementById('tabCodes').classList.toggle('inactive', tab !== 'codes');
-            document.getElementById('usersView').style.display = tab === 'users' ? 'block' : 'none';
-            document.getElementById('codesView').style.display = tab === 'codes' ? 'block' : 'none';
-        }
-
-        function setFilter(f) {
-            currentFilter = f;
-            document.getElementById('filterAll').classList.toggle('inactive', f !== 'all');
-            document.getElementById('filterPremium').classList.toggle('inactive', f !== 'premium');
-            document.getElementById('filterAdmin').classList.toggle('inactive', f !== 'admin');
-            renderUsers();
-        }
-        window.setFilter = setFilter;
-        window.switchTab = switchTab;
-
-        function renderUsers() {
-            let list = allUsers;
-            if (currentFilter === 'premium') list = list.filter(u => u.plan && u.plan.toLowerCase().includes('premium'));
-            if (currentFilter === 'admin') list = list.filter(u => u.plan && u.plan.toLowerCase().includes('admin'));
-
-            const body = document.getElementById('usersTableBody');
-            if (list.length === 0) {
-                body.innerHTML = '<div class="empty-state">No hay usuarios en esta categoría</div>';
-                return;
-            }
-
-            body.innerHTML = list.map(u => {
-                const rankClass = (u.plan || 'free').toLowerCase().includes('admin') ? 'admin' :
-                                   (u.plan || 'free').toLowerCase().includes('premium') ? 'premium' : 'free';
-                return `
-                <div class="user-row">
-                    <div class="user-cell"><strong>${u.username}</strong><span>${u.email}</span></div>
-                    <div><span class="rank-badge ${rankClass}">${u.plan || 'free'}</span></div>
-                    <div>${u.requestToday || 0} / ${u.limit || 100}</div>
-                    <div>
-                        <button class="mgmt-btn" onclick="promoteUser('${u.email}')">⭐ Premium</button>
-                        <button class="mgmt-btn danger" onclick="deleteUser('${u.email}')">🗑</button>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        function renderCodes() {
-            const body = document.getElementById('codesTableBody');
-            if (allCodes.length === 0) {
-                body.innerHTML = '<div class="empty-state">No hay códigos creados aún</div>';
-                return;
-            }
-            body.innerHTML = allCodes.map(c => `
-                <div class="user-row" style="grid-template-columns: 1fr 1fr 1fr auto;">
-                    <div class="user-cell"><strong>${c.code}</strong><span>${c.active ? 'Activo' : 'Agotado'}</span></div>
-                    <div>+${c.requests} solicitudes</div>
-                    <div>${c.uses} / ${c.maxUses} usos</div>
-                    <div><button class="mgmt-btn danger" onclick="deleteCode('${c.code}')">🗑</button></div>
-                </div>
-            `).join('');
-        }
-
-        async function deleteCode(code) {
-            if (!confirm(`¿Eliminar el código ${code}? Esta acción no se puede deshacer.`)) return;
-            await fetch('/api/auth/admin/delete-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adminKey: apiKey, code })
-            });
-            loadAdminData();
-        }
-        window.deleteCode = deleteCode;
-
-        async function promoteUser(email) {
-            await fetch('/api/auth/admin/set-role', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adminKey: apiKey, email, plan: 'premium', limit: 1000 })
-            });
-            loadAdminData();
-        }
-        window.promoteUser = promoteUser;
-
-        async function deleteUser(email) {
-            if (!confirm(`¿Eliminar al usuario ${email}? Esta acción no se puede deshacer.`)) return;
-            await fetch('/api/auth/admin/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adminKey: apiKey, email })
-            });
-            loadAdminData();
-        }
-        window.deleteUser = deleteUser;
-
-        async function createCode() {
-            const code = document.getElementById('newCodeName').value.trim();
-            const requests = document.getElementById('newCodeRequests').value.trim();
-            const maxUses = document.getElementById('newCodeUses').value.trim();
-            if (!code || !requests || !maxUses) { alert('Completa todos los campos'); return; }
-
-            const res = await fetch('/api/auth/admin/create-code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adminKey: apiKey, code, requests, maxUses })
-            });
-            const data = await res.json();
-            if (!data.status) { alert(data.message); return; }
-
-            document.getElementById('newCodeName').value = '';
-            document.getElementById('newCodeRequests').value = '';
-            document.getElementById('newCodeUses').value = '';
-            loadAdminData();
-        }
-        window.createCode = createCode;
-    </script>
-</body>
-</html>
+<div id="accessDenied" style="display:none"><i class="fas fa-lock"></i><h2>Acceso denegado</h2><p style="color:var(--text-secondary);margin-top:10px">Esta sección es solo para administradores.</p><a href="/dash" class="back-btn" style="margin-top:20px;display:inline-flex">Volver al Dashboard</a></div>
+<div id="adminPanel" style="display:none"><header><h1>FamilyBot-MD <span>STAFF</span></h1><div class="header-actions"><button class="theme-btn" id="themeBtn"><i class="fas fa-moon"></i></button><a href="/dash" class="back-btn"><i class="fas fa-arrow-left"></i> Volver</a></div></header>
+<main>
+<div class="stat-grid"><div class="stat-card"><div class="lbl">Usuarios</div><div class="num" id="totalUsersNum">0</div><div class="sub">Base de datos</div></div><div class="stat-card cyan"><div class="lbl">Códigos</div><div class="num" id="totalCodesNum">0</div><div class="sub">Activos</div></div><div class="stat-card green"><div class="lbl">Endpoints</div><div class="num" id="totalEndpointsNum">0</div><div class="sub">Soportados</div></div><div class="stat-card red"><div class="lbl">Errores</div><div class="num" id="endpointErrorsNum">0</div><div class="sub">Endpoints</div></div></div>
+<div class="tabs"><button class="tab-btn" id="tabUsers" onclick="switchTab('users')">👥 Usuarios</button><button class="tab-btn inactive" id="tabCodes" onclick="switchTab('codes')">🎁 Códigos</button><button class="tab-btn inactive" id="tabEndpoints" onclick="switchTab('endpoints')">🔌 Endpoints</button><button class="tab-btn inactive" id="tabLogs" onclick="switchTab('logs')">📝 Logs</button></div>
+<div id="usersView"><div class="filter-row"><button class="filter-btn" id="filterAll" onclick="setFilter('all')">TODOS</button><button class="filter-btn inactive" id="filterPremium" onclick="setFilter('premium')">PREMIUMS</button><button class="filter-btn inactive" id="filterAdmin" onclick="setFilter('admin')">ADMINS</button></div><div class="table-card"><div class="user-row header-row"><div>USUARIO / EMAIL</div><div>RANGO</div><div>CONSUMO</div><div>GESTIÓN</div></div><div id="usersTableBody"><div class="empty-state">Cargando protocolos...</div></div></div></div>
+<div id="codesView" style="display:none"><div class="codes-form"><input type="text" id="newCodeName" placeholder="CÓDIGO"><input type="number" id="newCodeRequests" placeholder="+Solicitudes"><input type="number" id="newCodeUses" placeholder="Usos máx"><button onclick="createCode()">Crear</button></div><div class="table-card" id="codesTableBody"><div class="empty-state">Cargando códigos...</div></div></div>
+<div id="endpointsView" style="display:none"><div class="section-head"><h2>🔌 Estado de Endpoints</h2><button class="refresh-btn" onclick="checkEndpoints()">🔄 Comprobar</button></div><div class="table-card"><div class="user-row header-row endpoint-row"><div>ENDPOINT</div><div>MÉTODO</div><div>ESTADO</div><div>TIEMPO</div><div>DETALLE</div></div><div id="endpointsTableBody"><div class="empty-state">Cargando endpoints...</div></div></div></div>
+<div id="logsView" style="display:none"><div class="section-head"><h2>📝 Solicitudes recientes</h2><button class="refresh-btn" onclick="loadLogs()">🔄 Actualizar</button></div><div class="table-card"><div class="log-filters"><input id="logEndpoint" placeholder="Endpoint"><input id="logMethod" placeholder="Método"><input id="logStatus" placeholder="HTTP"><button class="refresh-btn" onclick="loadLogs()">Filtrar</button></div><div class="user-row header-row log-row"><div>FECHA</div><div>MÉTODO</div><div>ENDPOINT</div><div>HTTP</div><div>TIEMPO</div></div><div id="logsTableBody"><div class="empty-state">Cargando logs...</div></div></div></div>
+</main></div>
+<script>
+const savedTheme=localStorage.getItem('familybot_theme')||'dark';document.documentElement.setAttribute('data-theme',savedTheme);function updateThemeIcon(){const l=document.documentElement.getAttribute('data-theme')==='light';document.getElementById('themeBtn').innerHTML=l?'<i class="fas fa-sun"></i>':'<i class="fas fa-moon"></i>'}updateThemeIcon();document.getElementById('themeBtn').addEventListener('click',()=>{const n=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('familybot_theme',n);updateThemeIcon()});
+const apiKey=localStorage.getItem('familybot_key'),role=localStorage.getItem('familybot_role');if(!apiKey||role!=='admin'){document.getElementById('accessDenied').style.display='block'}else{document.getElementById('adminPanel').style.display='block';loadAdminData();loadEndpointSummary()}
+let allUsers=[],allCodes=[],currentFilter='all';
+async function loadAdminData(){try{const r=await fetch(`/api/auth/admin/all?apiKey=${encodeURIComponent(apiKey)}`),d=await r.json();if(!d.status){document.getElementById('adminPanel').style.display='none';document.getElementById('accessDenied').style.display='block';return}allUsers=d.users;allCodes=d.codes;document.getElementById('totalUsersNum').innerText=d.totalUsers;document.getElementById('totalCodesNum').innerText=d.totalCodes;renderUsers();renderCodes()}catch(e){console.error(e)}}
+async function loadEndpointSummary(){try{const r=await fetch(`/api/admin/summary?apiKey=${encodeURIComponent(apiKey)}`),d=await r.json();if(d.status){document.getElementById('totalEndpointsNum').innerText=d.total||0;document.getElementById('endpointErrorsNum').innerText=d.errors||0}}catch(e){console.error(e)}}
+function switchTab(t){['users','codes','endpoints','logs'].forEach(x=>{document.getElementById('tab'+x.charAt(0).toUpperCase()+x.slice(1)).classList.toggle('inactive',t!==x);document.getElementById(x+'View').style.display=t===x?'block':'none'});if(t==='endpoints')loadEndpoints();if(t==='logs')loadLogs()}
+function setFilter(f){currentFilter=f;document.getElementById('filterAll').classList.toggle('inactive',f!=='all');document.getElementById('filterPremium').classList.toggle('inactive',f!=='premium');document.getElementById('filterAdmin').classList.toggle('inactive',f!=='admin');renderUsers()}window.setFilter=setFilter;window.switchTab=switchTab;
+function renderUsers(){let list=allUsers;if(currentFilter==='premium')list=list.filter(u=>u.plan&&u.plan.toLowerCase().includes('premium'));if(currentFilter==='admin')list=list.filter(u=>u.plan&&u.plan.toLowerCase().includes('admin'));const b=document.getElementById('usersTableBody');if(!list.length){b.innerHTML='<div class="empty-state">No hay usuarios en esta categoría</div>';return}b.innerHTML=list.map(u=>{const p=(u.plan||'free').toLowerCase(),rc=p.includes('admin')?'admin':p.includes('premium')?'premium':'free';return `<div class="user-row"><div class="user-cell"><strong>${escapeHtml(u.username)}</strong><span>${escapeHtml(u.email)}</span></div><div><span class="rank-badge ${rc}">${escapeHtml(u.plan||'free')}</span></div><div>${u.requestToday||0} / ${u.limit||100}</div><div><button class="mgmt-btn" onclick="promoteUser('${encodeURIComponent(u.email)}')">⭐ Premium</button><button class="mgmt-btn danger" onclick="deleteUser('${encodeURIComponent(u.email)}')">🗑</button></div></div>`}).join('')}
+function renderCodes(){const b=document.getElementById('codesTableBody');if(!allCodes.length){b.innerHTML='<div class="empty-state">No hay códigos creados aún</div>';return}b.innerHTML=allCodes.map(c=>`<div class="user-row" style="grid-template-columns:1fr 1fr 1fr auto"><div class="user-cell"><strong>${escapeHtml(c.code)}</strong><span>${c.active?'Activo':'Agotado'}</span></div><div>+${c.requests} solicitudes</div><div>${c.uses} / ${c.maxUses} usos</div><div><button class="mgmt-btn danger" onclick="deleteCode('${encodeURIComponent(c.code)}')">🗑</button></div></div>`).join('')}
+async function loadEndpoints(){const b=document.getElementById('endpointsTableBody');b.innerHTML='<div class="empty-state">Comprobando endpoints...</div>';try{const r=await fetch(`/api/admin/endpoints/check?apiKey=${encodeURIComponent(apiKey)}`),d=await r.json();if(!d.status)throw Error(d.message||'Error');b.innerHTML=d.endpoints.map(e=>{const s=e.status==='available'?'ok':e.status==='supported'?'partial':'error';const label=e.status==='available'?'Disponible':e.status==='supported'?'Soporte parcial':'Error';return `<div class="user-row endpoint-row"><div class="user-cell"><strong>${escapeHtml(e.path||'')}</strong><span>${escapeHtml(e.description||'')}</span></div><div>${escapeHtml(e.method||'GET')}</div><div><span class="status-badge ${s}">${label}</span></div><div class="time-text">${e.responseTimeMs!=null?e.responseTimeMs+' ms':'—'}</div><div class="error-text">${escapeHtml(e.error||'OK')}</div></div>`}).join('')}catch(e){b.innerHTML='<div class="empty-state">No se pudieron cargar los endpoints</div>'}}
+async function checkEndpoints(){await loadEndpoints();await loadEndpointSummary()}
+async function loadLogs(){const b=document.getElementById('logsTableBody');b.innerHTML='<div class="empty-state">Cargando logs...</div>';const q=new URLSearchParams();const ep=document.getElementById('logEndpoint').value.trim(),m=document.getElementById('logMethod').value.trim(),s=document.getElementById('logStatus').value.trim();if(ep)q.set('endpoint',ep);if(m)q.set('method',m);if(s)q.set('status',s);q.set('limit','50');try{const r=await fetch(`/api/admin/logs?apiKey=${encodeURIComponent(apiKey)}&${q}`),d=await r.json();if(!d.status)throw Error();const logs=d.logs||[];if(!logs.length){b.innerHTML='<div class="empty-state">No hay registros</div>';return}b.innerHTML=logs.map(l=>`<div class="user-row log-row"><div>${escapeHtml(l.timestamp||l.date||'—')}</div><div>${escapeHtml(l.method||'—')}</div><div class="user-cell"><strong>${escapeHtml(l.endpoint||l.path||'—')}</strong></div><div>${escapeHtml(String(l.statusCode??l.status??'—'))}</div><div class="time-text">${l.responseTimeMs!=null?l.responseTimeMs+' ms':l.duration!=null?l.duration+' ms':'—'}</div></div>`).join('')}catch(e){b.innerHTML='<div class="empty-state">No se pudieron cargar los logs</div>'}}
+function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+async function deleteCode(code){code=decodeURIComponent(code);if(!confirm(`¿Eliminar el código ${code}? Esta acción no se puede deshacer.`))return;await fetch('/api/auth/admin/delete-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminKey:apiKey,code})});loadAdminData()}window.deleteCode=deleteCode;
+async function promoteUser(email){email=decodeURIComponent(email);await fetch('/api/auth/admin/set-role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminKey:apiKey,email,plan:'premium',limit:1000})});loadAdminData()}window.promoteUser=promoteUser;
+async function deleteUser(email){email=decodeURIComponent(email);if(!confirm(`¿Eliminar al usuario ${email}? Esta acción no se puede deshacer.`))return;await fetch('/api/auth/admin/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminKey:apiKey,email})});loadAdminData()}window.deleteUser=deleteUser;
+async function createCode(){const code=document.getElementById('newCodeName').value.trim(),requests=document.getElementById('newCodeRequests').value.trim(),maxUses=document.getElementById('newCodeUses').value.trim();if(!code||!requests||!maxUses){alert('Completa todos los campos');return}const r=await fetch('/api/auth/admin/create-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminKey:apiKey,code,requests,maxUses})}),d=await r.json();if(!d.status){alert(d.message);return}document.getElementById('newCodeName').value='';document.getElementById('newCodeRequests').value='';document.getElementById('newCodeUses').value='';loadAdminData()}window.createCode=createCode;
+</script></body></html>
