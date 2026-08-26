@@ -1,5 +1,16 @@
-const express=require('express'); const router=express.Router();
-const API='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=unicorn%20illustration&gsrnamespace=6&gsrlimit=20&prop=imageinfo&iiprop=url&format=json&origin=*';
-async function image(){const r=await fetch(API,{headers:{'User-Agent':'FamilyBot-MD-API/1.0'}});if(!r.ok)throw Error(`HTTP ${r.status}`);const d=await r.json();const p=Object.values(d.query?.pages||{}).filter(x=>x.imageinfo?.[0]?.url);if(!p.length)throw Error('Sin imágenes');return p[Math.floor(Math.random()*p.length)].imageinfo[0].url;}
-router.get('/',async(req,res)=>{try{res.json({status:true,creator:'FamilyBot-MD',result:{url:await image(),provider:'Wikimedia Commons',type:'unicorn'}})}catch(e){console.error('[UNICORN ERROR]',e.message);res.status(502).json({status:false,creator:'FamilyBot-MD',message:'No se pudo obtener un unicornio.',error:'Servicio externo no disponible'})}});
-router.meta={title:'Unicornio aleatorio',description:'Obtiene una imagen aleatoria de un unicornio',icon:'fas fa-horse',fields:[],resultType:'image',resultField:'result.url'}; module.exports=router;
+const express = require('express');
+const router = express.Router();
+const { getRandomImage } = require('../../services/randomImage.service');
+
+router.get('/', async (req, res) => {
+    try {
+        const url = await getRandomImage('unicorn', 'unicorn illustration');
+        res.json({ status: true, creator: 'FamilyBot-MD', result: { url, provider: 'Wikimedia Commons', type: 'unicorn' } });
+    } catch (error) {
+        console.error('[UNICORN ERROR]', error.message);
+        res.status(502).json({ status: false, creator: 'FamilyBot-MD', message: 'No se pudo obtener un unicornio.', error: 'Servicio externo no disponible' });
+    }
+});
+
+router.meta = { title: 'Unicornio aleatorio', description: 'Obtiene una imagen aleatoria de un unicornio', icon: 'fas fa-horse', fields: [], resultType: 'image', resultField: 'result.url' };
+module.exports = router;
