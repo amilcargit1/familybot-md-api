@@ -18,38 +18,14 @@ const QUIZ = [
   { question: '¿Cuántos minutos tiene una hora?', options: ['30', '45', '60', '90'], answer: 2 }
 ];
 function ownerKey(owner, type) { return `${type}:${crypto.createHash('sha256').update(String(owner || 'anonymous')).digest('hex')}`; }
-function cleanup() {
-  const now = Date.now();
-  for (const [id, g] of games) if (g.expiresAt <= now) games.delete(id);
-  for (const [key, id] of sessions) if (!games.has(id)) sessions.delete(key);
-}
-function create(type, data, owner) {
-  cleanup();
-  if (games.size >= MAX_GAMES) games.delete(games.keys().next().value);
-  const id = crypto.randomBytes(9).toString('hex');
-  games.set(id, { type, data, owner: String(owner || 'anonymous'), expiresAt: Date.now() + TTL });
-  if (owner) sessions.set(ownerKey(owner, type), id);
-  return id;
-}
-function get(id, type) {
-  const key = String(id || '');
-  const g = games.get(key);
-  if (!g || g.type !== type || g.expiresAt <= Date.now()) { if (g) games.delete(key); return null; }
-  g.expiresAt = Date.now() + TTL;
-  return g;
-}
-function getSession(owner, type) {
-  const id = sessions.get(ownerKey(owner, type));
-  return id ? get(id, type) : null;
-}
-function remove(id) {
-  const g = games.get(String(id));
-  if (g) sessions.delete(ownerKey(g.owner, g.type));
-  games.delete(String(id));
-}
+function cleanup() { const now = Date.now(); for (const [id, g] of games) if (g.expiresAt <= now) games.delete(id); for (const [key, id] of sessions) if (!games.has(id)) sessions.delete(key); }
+function create(type, data, owner) { cleanup(); if (games.size >= MAX_GAMES) games.delete(games.keys().next().value); const id = crypto.randomBytes(9).toString('hex'); const sessionOwner = owner || 'anonymous'; games.set(id, { type, data, owner: String(sessionOwner), expiresAt: Date.now() + TTL }); sessions.set(ownerKey(sessionOwner, type), id); return id; }
+function get(id, type) { const key = String(id || ''); const g = games.get(key); if (!g || g.type !== type || g.expiresAt <= Date.now()) { if (g) games.delete(key); return null; } g.expiresAt = Date.now() + TTL; return g; }
+function getSession(owner, type) { const id = sessions.get(ownerKey(owner, type)); return id ? get(id, type) : null; }
+function remove(id) { const g = games.get(String(id)); if (g) sessions.delete(ownerKey(g.owner, g.type)); games.delete(String(id)); }
 function stateHangman(data) { const set = new Set(data.guessed); const masked = [...data.word].map(c => set.has(c) ? c : '_').join(' '); const won = [...data.word].every(c => set.has(c)); const lost = data.wrong >= data.maxWrong; return { masked, guessed: data.guessed, wrong: data.wrong, maxWrong: data.maxWrong, status: won ? 'won' : lost ? 'lost' : 'playing', word: won || lost ? data.word : undefined }; }
 function newHangman(owner) { const [word, hint] = WORDS[Math.floor(Math.random()*WORDS.length)]; const data={word,hint,guessed:[],wrong:0,maxWrong:6}; const id=create('hangman',data,owner); return { id, hint, ...stateHangman(data) }; }
-function hangmanGuess(id, value, owner) { const g=get(id,'hangman') || getSession(owner,'hangman'); if(!g)return {error:'Partida no encontrada o expirada. Genera una nueva partida primero.'}; const guess=String(value||'').trim().toLowerCase(); if(!/^[a-záéíóúüñ]$/.test(guess))return{error:'Debes enviar una sola letra.'}; if(g.data.guessed.includes(guess))return{error:'Ya probaste esa letra.',...stateHangman(g.data),id}; g.data.guessed.push(guess); if(!g.data.word.includes(guess))g.data.wrong++; const out=stateHangman(g.data); if(out.status!=='playing')remove(g.id); else out.id=g.id; return out; }
+function hangmanGuess(id, value, owner) { const g=get(id,'hangman') || getSession(owner,'hangman'); if(!g)return {error:'Partida no encontrada o expirada. Genera una nueva partida primero.'}; const guess=String(value||'').trim().toLowerCase(); if(!/^[a-záéíóúüñ]$/.test(guess))return{error:'Debes enviar una sola letra.'}; if(g.data.guessed.includes(guess))return{error:'Ya probaste esa letra.',...stateHangman(g.data),id:g.id}; g.data.guessed.push(guess); if(!g.data.word.includes(guess))g.data.wrong++; const out=stateHangman(g.data); if(out.status!=='playing')remove(g.id); else out.id=g.id; return out; }
 function newGuess(owner){const number=Math.floor(Math.random()*100)+1;const id=create('guess',{number,attempts:0,maxAttempts:7},owner);return{id,min:1,max:100,attempts:0,maxAttempts:7,status:'playing',message:'Partida creada. Usa el mismo API Key para enviar tus intentos.'};}
 function guessNumber(id,value,owner){const g=get(id,'guess')||getSession(owner,'guess');if(!g)return{error:'Partida no encontrada o expirada. Genera una nueva partida primero.'};const n=Number(value);if(!Number.isInteger(n)||n<1||n>100)return{error:'El número debe ser un entero entre 1 y 100.'};g.data.attempts++;if(n===g.data.number||g.data.attempts>=g.data.maxAttempts){const won=n===g.data.number;remove(g.id);return{status:won?'won':'lost',attempts:g.data.attempts,number:won?undefined:g.data.number,message:won?'¡Correcto!':'Se acabaron los intentos.'};}return{id:g.id,status:'playing',hint:n<g.data.number?'El número secreto es mayor.':'El número secreto es menor.',attempts:g.data.attempts,remaining:g.data.maxAttempts-g.data.attempts};}
 function newScramble(owner){const[word]=WORDS[Math.floor(Math.random()*WORDS.length)];let scrambled=word;for(let i=0;i<10&&scrambled===word;i++)scrambled=[...word].sort(()=>Math.random()-.5).join('');const id=create('scramble',{word,attempts:0},owner);return{id,scrambled,length:word.length,status:'playing'};}
