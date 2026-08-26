@@ -67,6 +67,7 @@ app.get('/dash', (req, res) => sendPage(res, 'dash.html'));
 app.get('/profile', (req, res) => sendPage(res, 'profile.html'));
 app.get('/admin', (req, res) => sendPage(res, 'admin.html'));
 app.get('/docs', (req, res) => sendPage(res, 'docs.html'));
+app.get('/bot-docs', (req, res) => sendPage(res, 'bot-docs.html'));
 app.get('/forgot-password', (req, res) => sendPage(res, 'forgot-password.html'));
 app.get('/reset-password', (req, res) => sendPage(res, 'reset-password.html'));
 
