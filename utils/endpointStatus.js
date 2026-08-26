@@ -15,8 +15,16 @@ function setEndpointEnabled(path, enabled) {
     return !disabledEndpoints.has(key);
 }
 
+function isInternalAdminEndpoint(endpoint) {
+    return String(endpoint?.path || '').startsWith('/api/admin/');
+}
+
+function getPublicApiEndpoints(app) {
+    return (app.locals.apiEndpoints || []).filter((endpoint) => !isInternalAdminEndpoint(endpoint));
+}
+
 function buildEndpointCatalog(app) {
-    return (app.locals.apiEndpoints || []).map((endpoint) => {
+    return getPublicApiEndpoints(app).map((endpoint) => {
         const enabled = !isDisabled(endpoint.path);
         return {
             ...endpoint,
@@ -64,35 +72,16 @@ function checkUrl(url, timeoutMs = 8000) {
             res.resume();
             res.on('end', () => {
                 const code = res.statusCode || 0;
-
-                // La ruta existe pero exige autenticación.
                 if (code === 401 || code === 403) {
-                    return finish({
-                        status: 'auth_required',
-                        httpStatus: code,
-                        error: `HTTP ${code}: requiere autenticación.`
-                    });
+                    return finish({ status: 'auth_required', httpStatus: code, error: `HTTP ${code}: requiere autenticación.` });
                 }
-
-                // Normalmente indica parámetros faltantes, query obligatoria o
-                // una ruta dinámica que no puede comprobarse sin datos.
                 if (code === 400 || code === 404 || code === 405 || code === 422) {
-                    return finish({
-                        status: 'needs_input',
-                        httpStatus: code,
-                        error: `HTTP ${code}: requiere datos o una petición específica.`
-                    });
+                    return finish({ status: 'needs_input', httpStatus: code, error: `HTTP ${code}: requiere datos o una petición específica.` });
                 }
-
                 if (code >= 200 && code < 400) {
                     return finish({ status: 'available', httpStatus: code, error: null });
                 }
-
-                return finish({
-                    status: 'error',
-                    httpStatus: code,
-                    error: `HTTP ${code}`
-                });
+                return finish({ status: 'error', httpStatus: code, error: `HTTP ${code}` });
             });
         });
 
