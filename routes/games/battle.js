@@ -1,0 +1,3 @@
+const express=require('express');const router=express.Router();const game=require('../../services/games.service');
+router.get('/',(req,res)=>{try{const result=game.battle(req.query.name);res.json({status:true,creator:'FamilyBot-MD',result});}catch(e){console.error('[BATTLE ERROR]',e);res.status(500).json({status:false,creator:'FamilyBot-MD',message:'No se pudo ejecutar la batalla.'});}});
+router.meta={title:'Batalla',description:'Compara tus estadísticas contra un rival aleatorio',icon:'fas fa-khanda',fields:[{name:'name',label:'Tu nombre',type:'text'}],resultType:'json',resultField:'result'};module.exports=router;
