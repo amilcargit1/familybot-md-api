@@ -3,6 +3,7 @@ const sharp = require('sharp');
 const WIDTH = 1200;
 const HEIGHT = 630;
 const MAX_AVATAR_BYTES = 4 * 1024 * 1024;
+const AVATAR_TIMEOUT_MS = 5000;
 const STYLES = new Set(['divine', 'royal', 'neon', 'galaxy', 'dark']);
 
 const THEMES = {
@@ -24,25 +25,41 @@ function cleanText(value, fallback, max = 42) {
     return escapeXml((text || fallback).slice(0, max));
 }
 
+function isBlockedHost(hostname) {
+    const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+    return host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' ||
+        host === '0.0.0.0' || host === '::1' || host.startsWith('127.') ||
+        host.startsWith('10.') || host.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(host) || host.endsWith('.local');
+}
+
 async function fetchAvatar(url) {
     if (!url) return null;
     let parsed;
     try { parsed = new URL(url); } catch { throw new Error('avatarUrl no es una URL válida.'); }
     if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('avatarUrl debe usar HTTP o HTTPS.');
+    if (isBlockedHost(parsed.hostname)) throw new Error('avatarUrl no puede apuntar a una dirección local o privada.');
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    const timer = setTimeout(() => controller.abort(), AVATAR_TIMEOUT_MS);
     try {
         const response = await fetch(parsed, {
             signal: controller.signal,
-            headers: { 'User-Agent': 'FamilyBot-MD-WelcomeCanvas/1.0' }
+            redirect: 'follow',
+            headers: { 'User-Agent': 'FamilyBot-MD-WelcomeCanvas/1.1', Accept: 'image/*' }
         });
         if (!response.ok) throw new Error(`No se pudo descargar el avatar (HTTP ${response.status}).`);
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType && !contentType.startsWith('image/')) throw new Error('avatarUrl no apunta a una imagen.');
         const length = Number(response.headers.get('content-length') || 0);
         if (length > MAX_AVATAR_BYTES) throw new Error('El avatar supera el límite de 4 MB.');
         const buffer = Buffer.from(await response.arrayBuffer());
+        if (!buffer.length) throw new Error('El avatar está vacío.');
         if (buffer.length > MAX_AVATAR_BYTES) throw new Error('El avatar supera el límite de 4 MB.');
         return buffer;
+    } catch (error) {
+        if (error?.name === 'AbortError') throw new Error('La descarga del avatar tardó demasiado.');
+        throw error;
     } finally { clearTimeout(timer); }
 }
 
@@ -72,23 +89,24 @@ ${stars}
 }
 
 function textSvg(theme, data) {
-    const title = data.style === 'divine' ? 'WELCOME TO THE KINGDOM' : 'WELCOME';
+    const title = cleanText(data.title, data.style === 'divine' ? 'WELCOME TO THE KINGDOM' : 'WELCOME', 32);
     const subtitle = cleanText(data.message, 'Bienvenido al grupo', 55);
     const username = cleanText(data.username, 'Nuevo miembro', 34);
     const group = cleanText(data.groupName, 'Nuestro grupo', 40);
     const members = cleanText(data.members, '0', 12);
     const date = cleanText(data.date, new Date().toLocaleDateString('es-PE'), 24);
+    const footer = cleanText(data.footer, '✦ FamilyBot-MD ✦', 30);
 
     return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
 <style>.title,.small,.body,.name{font-family:Arial,Helvetica,sans-serif}.title,.name{font-weight:800}.small{letter-spacing:1px}</style>
-<text x="600" y="126" text-anchor="middle" fill="${theme.accent}" font-size="25" class="title" letter-spacing="4">${escapeXml(title)}</text>
+<text x="600" y="126" text-anchor="middle" fill="${theme.accent}" font-size="25" class="title" letter-spacing="4">${title}</text>
 <text x="600" y="164" text-anchor="middle" fill="${theme.muted}" font-size="18" class="small">${subtitle}</text>
 <text x="780" y="315" fill="${theme.text}" font-size="52" class="name">${username}</text>
 <text x="780" y="356" fill="${theme.muted}" font-size="23" class="body">${group}</text>
 <text x="780" y="410" fill="${theme.text}" font-size="21" class="body">MIEMBROS: ${members}</text>
 <text x="780" y="450" fill="${theme.muted}" font-size="18" class="small">${date}</text>
-<text x="780" y="490" fill="${theme.accent}" font-size="20" class="body">✦ FamilyBot-MD ✦</text>
+<text x="780" y="490" fill="${theme.accent}" font-size="20" class="body">${footer}</text>
 </svg>`);
 }
 
