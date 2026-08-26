@@ -23,7 +23,8 @@ router.post('/', upload.single('avatar'), async (req, res) => {
     return res.json({ status:true, creator:'FamilyBot-MD', result:{ url:`data:image/png;base64,${image.toString('base64')}`, format:'png', style } });
   } catch (e) {
     console.error('[GOODBYE CANVAS ERROR]',e);
-    return res.status(500).json({status:false,creator:'FamilyBot-MD',message:'No se pudo generar el Goodbye Canvas.'});
+    const status = /avatar|imagen|image|HTTP|URL|límite|MB|dirección local|privada|tardó demasiado|vacío/i.test(e.message || '') ? 422 : 500;
+    return res.status(status).json({status:false,creator:'FamilyBot-MD',message: status === 422 ? e.message : 'No se pudo generar el Goodbye Canvas.'});
   }
 });
 router.use((error, req, res, next) => {
