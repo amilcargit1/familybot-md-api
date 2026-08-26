@@ -25,6 +25,11 @@ function param(req, name, fallback = '') {
     return req.body?.[name] ?? req.query?.[name] ?? fallback;
 }
 
+function wantsImage(req) {
+    return String(req.query.format || '').toLowerCase() === 'image' ||
+        String(req.headers.accept || '').toLowerCase().includes('image/png');
+}
+
 router.post('/', upload.single('avatar'), async (req, res) => {
     try {
         const style = String(param(req, 'style', 'divine')).toLowerCase();
@@ -50,7 +55,7 @@ router.post('/', upload.single('avatar'), async (req, res) => {
             footer: text(param(req, 'footer'), '✦ FamilyBot-MD ✦', 30)
         });
 
-        if (String(req.query.format || '').toLowerCase() === 'image') {
+        if (wantsImage(req)) {
             return res.status(200)
                 .type('png')
                 .set('Content-Length', String(image.length))
@@ -98,9 +103,7 @@ router.meta = {
         { name: 'date', label: 'Fecha', type: 'text', placeholder: 'Opcional' },
         { name: 'title', label: 'Título', type: 'text', placeholder: 'WELCOME' },
         { name: 'footer', label: 'Pie', type: 'text', placeholder: '✦ FamilyBot-MD ✦' },
-        { name: 'style', label: 'Estilo', type: 'select', options: [
-            { value: 'divine', label: 'Divine' }, { value: 'royal', label: 'Royal' }, { value: 'neon', label: 'Neon' }, { value: 'galaxy', label: 'Galaxy' }, { value: 'dark', label: 'Dark' }
-        ], default: 'divine' }
+        { name: 'style', label: 'Estilo', type: 'select', options: [...STYLES].map(v => ({ value: v, label: v })), default: 'divine' }
     ],
     resultType: 'image',
     resultField: 'result.url',
