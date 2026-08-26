@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FamilyBot-MD · Canvas para WhatsApp</title><style>body{font-family:system-ui;background:#0a0b0e;color:#f1f5f9;max-width:1000px;margin:auto;padding:24px}section{background:#14161c;border:1px solid #252936;border-radius:14px;padding:18px;margin:16px 0}code,pre{background:#090a0d;border-radius:9px;padding:12px;display:block;overflow:auto;color:#dbe4ee}h1{color:#ec4899}h2{margin-bottom:6px}.muted{color:#94a3b8}a{color:#22d3ee}</style></head><body><h1>🖼️ Canvas de FamilyBot-MD para WhatsApp</h1><p class="muted">Los cinco Canvas usan POST multipart/form-data y pueden devolver el PNG directamente. Esto evita que el bot tenga que convertir Base64.</p><section><h2>Regla recomendada</h2><pre>POST /api/canvas/&lt;nombre&gt;?apiKey=TU_API_KEY&format=image
+Accept: image/png</pre><p>La respuesta es <b>image/png</b>. En Baileys se convierte directamente a Buffer.</p></section><section><h2>Baileys · plantilla universal</h2><pre>const fs = require('node:fs');
+
+const form = new FormData();
+form.append('avatar', new Blob([fs.readFileSync('./avatar.jpg')], { type: 'image/jpeg' }), 'avatar.jpg');
+form.append('username', 'Juan');
+
+const response = await fetch(
+  'https://TU_API/api/canvas/welcome?apiKey=TU_API_KEY&format=image',
+  { method: 'POST', headers: { Accept: 'image/png' }, body: form }
+);
+
+if (!response.ok) throw new Error('API HTTP ' + response.status);
+const buffer = Buffer.from(await response.arrayBuffer());
+await sock.sendMessage(chatId, { image: buffer, caption: 'Canvas generado' });</pre></section><section><h2>Welcome</h2><pre>username · groupName · members · message · date · title · footer · style · avatar/ avatarUrl</pre></section><section><h2>Goodbye</h2><pre>username · groupName · members · message · date · title · footer · style · avatar/ avatarUrl</pre></section><section><h2>Profile</h2><pre>username · level · xp · coins · rank · bio · title · footer · style · avatar/ avatarUrl
+
+Valores automáticos: Nivel 1 · 0 XP · 0 monedas · Sin ranking · Sin biografía</pre></section><section><h2>Level Up</h2><pre>username · level · xp · message · title · footer · style · avatar/ avatarUrl
+
+Si faltan datos: Nivel 2 · XP: 0 · Has subido de nivel</pre></section><section><h2>Rank</h2><pre>username · rank · score · period · title · footer · style · avatar/ avatarUrl
+
+Si faltan datos: #1 · 1000 XP · TOP</pre></section><section><h2>También puedes usar JSON/Base64</h2><p>Si no envías <code>format=image</code>, la API conserva la respuesta JSON con <code>result.url</code> como <code>data:image/png;base64,...</code>. Así se mantiene la compatibilidad con clientes existentes.</p></section><p><a href="/bot-docs.html">← Volver a la guía general para bots</a></p></body></html>
