@@ -1,6 +1,7 @@
 const http = require('http');
 const https = require('https');
 
+// Los cambios de monitorización viven en memoria. No desactivan la ruta real.
 const disabledEndpoints = new Set();
 
 function isDisabled(path) {
@@ -24,6 +25,7 @@ function buildEndpointCatalog(app) {
             status: enabled ? 'available' : 'disabled',
             lastCheckedAt: null,
             responseTimeMs: null,
+            httpStatus: null,
             error: enabled ? null : 'Monitorización desactivada por un administrador.'
         };
     });
@@ -42,12 +44,14 @@ function checkUrl(url, timeoutMs = 8000) {
             settled = true;
             resolve({ ...result, responseTimeMs: Date.now() - started });
         };
+
         let parsed;
         try {
             parsed = new URL(url);
         } catch {
             return finish({ status: 'error', error: 'URL de comprobación inválida.' });
         }
+
         const client = getRequestModule(parsed.protocol);
         const req = client.request(parsed, {
             method: 'GET',
@@ -60,12 +64,42 @@ function checkUrl(url, timeoutMs = 8000) {
             res.resume();
             res.on('end', () => {
                 const code = res.statusCode || 0;
-                finish(code >= 200 && code < 500
-                    ? { status: code < 400 ? 'available' : 'error', httpStatus: code, error: code >= 400 ? `HTTP ${code}` : null }
-                    : { status: 'error', httpStatus: code, error: `HTTP ${code}` });
+
+                // La ruta existe pero exige autenticación.
+                if (code === 401 || code === 403) {
+                    return finish({
+                        status: 'auth_required',
+                        httpStatus: code,
+                        error: `HTTP ${code}: requiere autenticación.`
+                    });
+                }
+
+                // Normalmente indica parámetros faltantes, query obligatoria o
+                // una ruta dinámica que no puede comprobarse sin datos.
+                if (code === 400 || code === 404 || code === 405 || code === 422) {
+                    return finish({
+                        status: 'needs_input',
+                        httpStatus: code,
+                        error: `HTTP ${code}: requiere datos o una petición específica.`
+                    });
+                }
+
+                if (code >= 200 && code < 400) {
+                    return finish({ status: 'available', httpStatus: code, error: null });
+                }
+
+                return finish({
+                    status: 'error',
+                    httpStatus: code,
+                    error: `HTTP ${code}`
+                });
             });
         });
-        req.on('timeout', () => { req.destroy(); finish({ status: 'error', error: 'Tiempo de espera agotado.' }); });
+
+        req.on('timeout', () => {
+            req.destroy();
+            finish({ status: 'error', error: 'Tiempo de espera agotado.' });
+        });
         req.on('error', (error) => finish({ status: 'error', error: error.message }));
         req.end();
     });
@@ -79,23 +113,30 @@ async function checkEndpoint(baseUrl, endpoint) {
             checked: false,
             lastCheckedAt: new Date().toISOString(),
             responseTimeMs: null,
+            httpStatus: null,
             error: 'Monitorización desactivada por un administrador.'
         };
     }
 
     if (String(endpoint.method || 'GET').toUpperCase() !== 'GET') {
         return {
-            status: 'supported',
+            status: 'needs_input',
             monitoringEnabled: true,
             checked: false,
             lastCheckedAt: new Date().toISOString(),
             responseTimeMs: null,
+            httpStatus: null,
             error: 'Requiere datos de entrada; no se ejecutó automáticamente.'
         };
     }
 
     const result = await checkUrl(new URL(endpoint.path, baseUrl).toString());
-    return { ...result, monitoringEnabled: true, checked: true, lastCheckedAt: new Date().toISOString() };
+    return {
+        ...result,
+        monitoringEnabled: true,
+        checked: true,
+        lastCheckedAt: new Date().toISOString()
+    };
 }
 
 async function checkAllGetEndpoints(app, baseUrl) {
