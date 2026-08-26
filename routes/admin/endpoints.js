@@ -1,8 +1,19 @@
 const express = require('express');
-const { requireAdmin } = require('../../middlewares/auth');
 const { buildEndpointCatalog, checkAllGetEndpoints } = require('../../utils/endpointStatus');
 
 const router = express.Router();
+
+// loadRoutes ya aplica authHandler a todo /api/admin/*.
+// Aquí solo comprobamos que la credencial autenticada tenga rol admin.
+function requireAdmin(req, res, next) {
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({
+            status: false,
+            message: 'Acceso restringido a administradores.'
+        });
+    }
+    next();
+}
 
 router.get('/', requireAdmin, (req, res) => {
     const endpoints = buildEndpointCatalog(req.app);
