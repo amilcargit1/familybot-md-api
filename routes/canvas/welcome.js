@@ -97,6 +97,7 @@ router.meta = {
     method: 'POST',
     fields: [
         { name: 'avatar', label: 'Avatar', type: 'file' },
+        { name: 'avatarUrl', label: 'Avatar URL', type: 'url', placeholder: 'https://...' },
         { name: 'username', label: 'Usuario', type: 'text', placeholder: 'Nombre del nuevo miembro' },
         { name: 'groupName', label: 'Grupo', type: 'text', placeholder: 'Nombre del grupo' },
         { name: 'members', label: 'Miembros', type: 'text', placeholder: '123' },
@@ -117,7 +118,20 @@ router.meta = {
         }
     ],
     resultType: 'image',
-    resultField: 'result.url'
+    resultField: 'result.url',
+    example: {
+        method: 'POST',
+        path: '/api/canvas/welcome?apiKey=TU_KEY&format=image',
+        contentType: 'multipart/form-data',
+        fields: {
+            avatar: 'avatar.jpg',
+            username: 'Juan',
+            groupName: 'Mi Grupo',
+            members: '25',
+            message: '¡Bienvenido al grupo!',
+            style: 'neon'
+        }
+    }
 };
 
 module.exports = router;
