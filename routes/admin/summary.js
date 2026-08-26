@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAdmin } = require('../../middlewares/auth');
+const { requireAdmin } = require('../../middlewares/requireAdmin');
 const { buildEndpointCatalog } = require('../../utils/endpointStatus');
 
 const router = express.Router();
