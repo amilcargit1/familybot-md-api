@@ -1,533 +1,232 @@
 const express = require('express');
 const router = express.Router();
 
-/*
- * ╔══════════════════════════════════════════════╗
- * ║              FamilyBot-MD API               ║
- * ║                 Anime Gacha                 ║
- * ╚══════════════════════════════════════════════╝
- *
- * GET /api/anime/gacha?apiKey=TU_API_KEY
- *
- * Características:
- * - Categorías aleatorias
- * - Rarezas
- * - Timeout
- * - Reintentos
- * - Fallback entre categorías
- * - Validación de respuestas
- * - Compatible con el dashboard actual
- */
-
-// ======================================================
-// CONFIGURACIÓN
-// ======================================================
-
 const TIMEOUT_MS = 8000;
 const MAX_ATTEMPTS = 3;
-
 const NEKOSBEST_API = 'https://nekos.best/api/v2';
+const USER_AGENT = 'FamilyBot-MD-API';
 
-const USER_AGENT =
-    'FamilyBot-MD-API (https://github.com/amilcargit1/familybot-md-api)';
-
-// ======================================================
-// CATEGORÍAS
-// ======================================================
-
-const CATEGORIES = [
-    'waifu',
-    'neko',
-    'husbando',
-    'kitsune'
-];
-
-// ======================================================
-// RAREZAS
-// ======================================================
-
+const CATEGORIES = ['waifu', 'neko', 'husbando', 'kitsune'];
 const RARITIES = [
-    {
-        name: 'Common',
-        emoji: '⚪',
-        chance: 55
-    },
-    {
-        name: 'Rare',
-        emoji: '🔵',
-        chance: 30
-    },
-    {
-        name: 'Epic',
-        emoji: '🟣',
-        chance: 12
-    },
-    {
-        name: 'Legendary',
-        emoji: '🟡',
-        chance: 3
-    }
+    { name: 'Common', emoji: '⚪', chance: 55 },
+    { name: 'Rare', emoji: '🔵', chance: 30 },
+    { name: 'Epic', emoji: '🟣', chance: 12 },
+    { name: 'Legendary', emoji: '🟡', chance: 3 }
 ];
-
-// ======================================================
-// ESPERA
-// ======================================================
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ======================================================
-// ALEATORIO
-// ======================================================
 
 function randomItem(array) {
-    return array[
-        Math.floor(Math.random() * array.length)
-    ];
+    return array[Math.floor(Math.random() * array.length)];
 }
-
-// ======================================================
-// ID DEL GACHA
-// ======================================================
 
 function generateGachaId() {
-
-    return (
-        Date.now().toString(36) +
-        '-' +
-        Math.random()
-            .toString(36)
-            .substring(2, 10)
-    ).toUpperCase();
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
 }
 
-// ======================================================
-// RAREZA
-// ======================================================
-
 function generateRarity() {
-
-    const random = Math.random() * 100;
-
-    let accumulated = 0;
-
+    const value = Math.random() * 100;
+    let total = 0;
     for (const rarity of RARITIES) {
-
-        accumulated += rarity.chance;
-
-        if (random <= accumulated) {
-            return rarity;
-        }
+        total += rarity.chance;
+        if (value <= total) return rarity;
     }
-
     return RARITIES[0];
 }
 
-// ======================================================
-// FETCH JSON CON TIMEOUT
-// ======================================================
+function isValidHttpUrl(value) {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' || url.protocol === 'http:';
+    } catch {
+        return false;
+    }
+}
 
 async function fetchJson(url) {
-
     const controller = new AbortController();
-
-    const timeout = setTimeout(() => {
-        controller.abort();
-    }, TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-
         const response = await fetch(url, {
-
-            method: 'GET',
-
             headers: {
-                'Accept': 'application/json',
+                Accept: 'application/json',
                 'User-Agent': USER_AGENT,
                 'Cache-Control': 'no-cache'
             },
-
             signal: controller.signal
         });
 
-        // --------------------------------------------------
-        // HTTP
-        // --------------------------------------------------
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        if (!response.ok) {
-
-            throw new Error(
-                `HTTP ${response.status}`
-            );
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.toLowerCase().includes('application/json')) {
+            throw new Error('La respuesta no es JSON');
         }
 
-        // --------------------------------------------------
-        // CONTENT TYPE
-        // --------------------------------------------------
-
-        const contentType =
-            response.headers.get('content-type') || '';
-
-        if (
-            !contentType
-                .toLowerCase()
-                .includes('application/json')
-        ) {
-
-            throw new Error(
-                'La respuesta no es JSON'
-            );
-        }
-
-        return await response.json();
-
+        return response.json();
     } finally {
-
-        clearTimeout(timeout);
+        clearTimeout(timer);
     }
 }
 
-// ======================================================
-// VALIDAR URL
-// ======================================================
+async function downloadImage(url) {
+    if (!isValidHttpUrl(url)) throw new Error('URL de imagen inválida');
 
-function isValidUrl(url) {
-
-    if (typeof url !== 'string') {
-        return false;
-    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
+        const response = await fetch(url, {
+            headers: {
+                Accept: 'image/avif,image/webp,image/apng,image/gif,image/jpeg,image/png,*/*;q=0.8',
+                'User-Agent': USER_AGENT
+            },
+            signal: controller.signal
+        });
 
-        const parsed = new URL(url);
+        if (!response.ok) throw new Error(`Imagen HTTP ${response.status}`);
 
-        return (
-            parsed.protocol === 'https:' ||
-            parsed.protocol === 'http:'
-        );
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.toLowerCase().startsWith('image/')) {
+            throw new Error(`Contenido no es imagen: ${contentType}`);
+        }
 
-    } catch {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        if (!buffer.length) throw new Error('Imagen vacía');
 
-        return false;
+        return { buffer, contentType };
+    } finally {
+        clearTimeout(timer);
     }
 }
 
-// ======================================================
-// OBTENER DE NEKOSBEST
-// ======================================================
-
 async function getFromNekosBest(category) {
+    const data = await fetchJson(`${NEKOSBEST_API}/${category}?amount=1`);
 
-    const url =
-        `${NEKOSBEST_API}/${category}?amount=1`;
-
-    const data =
-        await fetchJson(url);
-
-    // --------------------------------------------------
-    // VALIDAR RESULTS
-    // --------------------------------------------------
-
-    if (
-        !data ||
-        !Array.isArray(data.results) ||
-        data.results.length === 0
-    ) {
-
-        throw new Error(
-            'NekosBest no devolvió resultados'
-        );
+    if (!Array.isArray(data?.results) || !data.results.length) {
+        throw new Error('NekosBest no devolvió resultados');
     }
 
-    const result = data.results[0];
-
-    // --------------------------------------------------
-    // VALIDAR RESULTADO
-    // --------------------------------------------------
-
-    if (!result) {
-
-        throw new Error(
-            'Resultado vacío'
-        );
+    const result = randomItem(data.results);
+    if (!result || !isValidHttpUrl(result.url)) {
+        throw new Error('La URL recibida no es válida');
     }
-
-    // --------------------------------------------------
-    // VALIDAR URL
-    // --------------------------------------------------
-
-    if (!isValidUrl(result.url)) {
-
-        throw new Error(
-            'La URL recibida no es válida'
-        );
-    }
-
-    // --------------------------------------------------
-    // DEVOLVER DATOS
-    // --------------------------------------------------
 
     return {
-
         url: result.url,
-
-        artist:
-            result.artist_name || null,
-
-        artist_url:
-            result.artist_href || null,
-
-        source:
-            result.source_url || null,
-
-        dimensions:
-            result.dimensions || null
+        artist: result.artist_name || null,
+        artist_url: result.artist_href || null,
+        source: result.source_url || null,
+        dimensions: result.dimensions || null
     };
 }
 
-// ======================================================
-// CREAR ORDEN DE CATEGORÍAS
-// ======================================================
-
-function createCategoryOrder() {
-
-    const shuffled = [...CATEGORIES];
-
-    for (
-        let i = shuffled.length - 1;
-        i > 0;
-        i--
-    ) {
-
-        const j =
-            Math.floor(
-                Math.random() * (i + 1)
-            );
-
-        [
-            shuffled[i],
-            shuffled[j]
-        ] = [
-            shuffled[j],
-            shuffled[i]
-        ];
+function shuffle(array) {
+    const result = [...array];
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
     }
-
-    return shuffled;
+    return result;
 }
 
-// ======================================================
-// GET /api/anime/gacha
-// ======================================================
-
-router.get('/', async (req, res) => {
-
-    const gachaId =
-        generateGachaId();
-
-    const rarity =
-        generateRarity();
-
-    const categoryOrder =
-        createCategoryOrder();
-
+async function getGachaResult() {
+    const gachaId = generateGachaId();
+    const rarity = generateRarity();
+    const categories = shuffle(CATEGORIES);
     const errors = [];
+    const attempts = Math.min(MAX_ATTEMPTS, categories.length);
 
-    const maxAttempts =
-        Math.min(
-            MAX_ATTEMPTS,
-            categoryOrder.length
-        );
-
-    // ==================================================
-    // CASCADA
-    // ==================================================
-
-    for (
-        let i = 0;
-        i < maxAttempts;
-        i++
-    ) {
-
-        const category =
-            categoryOrder[i];
-
+    for (let i = 0; i < attempts; i++) {
+        const category = categories[i];
         try {
-
-            console.log(
-                `[GACHA] ${gachaId} → ${category} → ${rarity.name}`
-            );
-
-            const result =
-                await getFromNekosBest(
-                    category
-                );
-
-            // ==================================================
-            // ÉXITO
-            // ==================================================
-
-            console.log(
-                `[GACHA] ${gachaId} → ${category} OK`
-            );
-
-            /*
-             * IMPORTANTE:
-             *
-             * category y url están directamente
-             * en el JSON para mantener compatibilidad
-             * con el dashboard actual.
-             */
-
-            return res.status(200).json({
-
-                status: true,
-
-                creator:
-                    'familybot-md',
-
-                // ==============================================
-                // CAMPOS PRINCIPALES DEL DASHBOARD
-                // ==============================================
-
-                category:
-                    category,
-
-                url:
-                    result.url,
-
-                // ==============================================
-                // GACHA
-                // ==============================================
-
-                gachaId:
-                    gachaId,
-
-                rarity:
-                    rarity.name,
-
-                rarityEmoji:
-                    rarity.emoji,
-
-                rarityChance:
-                    `${rarity.chance}%`,
-
-                // ==============================================
-                // INFORMACIÓN DE LA IMAGEN
-                // ==============================================
-
-                artist:
-                    result.artist,
-
-                artist_url:
-                    result.artist_url,
-
-                source:
-                    result.source,
-
-                dimensions:
-                    result.dimensions,
-
-                // ==============================================
-                // PROVEEDOR
-                // ==============================================
-
-                provider:
-                    'nekos.best',
-
-                attempts:
-                    i + 1,
-
-                fallback:
-                    i > 0,
-
-                // ==============================================
-                // MENSAJE
-                // ==============================================
-
-                message:
-                    `🎰 ¡Gacha! Obtuviste ${rarity.emoji} ${rarity.name}`
-            });
-
+            const result = await getFromNekosBest(category);
+            return {
+                gachaId,
+                rarity,
+                category,
+                attempts: i + 1,
+                fallback: i > 0,
+                result,
+                errors
+            };
         } catch (error) {
-
-            const errorMessage =
-                error?.name === 'AbortError'
-                    ? 'Timeout'
-                    : (
-                        error?.message ||
-                        'Error desconocido'
-                    );
-
-            console.error(
-                `[GACHA] ${gachaId} → ${category} → ${errorMessage}`
-            );
-
-            errors.push({
-
-                category:
-                    category,
-
-                error:
-                    errorMessage
-            });
-
-            // --------------------------------------------------
-            // Esperar antes del siguiente proveedor/categoría
-            // --------------------------------------------------
-
-            if (
-                i <
-                maxAttempts - 1
-            ) {
-
-                await sleep(300);
-            }
+            errors.push({ category, error: error.message });
         }
     }
 
-    // ==================================================
-    // TODO FALLÓ
-    // ==================================================
+    throw new Error(`Gacha falló: ${gachaId}`);
+}
 
-    console.error(
-        `[GACHA] ${gachaId} → todos los intentos fallaron`
-    );
+// GET /api/anime/gacha?apiKey=...&format=json|image
+router.get('/', async (req, res) => {
+    const format = String(req.query.format || 'json').toLowerCase();
 
-    return res.status(502).json({
+    if (!['json', 'image'].includes(format)) {
+        return res.status(400).json({
+            status: false,
+            message: 'format debe ser json o image'
+        });
+    }
 
-        status: false,
+    try {
+        const data = await getGachaResult();
 
-        creator:
-            'familybot-md',
+        if (format === 'image') {
+            const image = await downloadImage(data.result.url);
+            res.setHeader('Content-Type', image.contentType);
+            res.setHeader('Content-Length', image.buffer.length);
+            res.setHeader('Cache-Control', 'no-store');
+            res.setHeader('X-FamilyBot-Gacha-Id', data.gachaId);
+            res.setHeader('X-FamilyBot-Rarity', data.rarity.name);
+            return res.status(200).send(image.buffer);
+        }
 
-        gachaId:
-            gachaId,
-
-        message:
-            'No se pudo completar la tirada de Gacha en este momento',
-
-        provider:
-            'nekos.best',
-
-        attempts:
-            maxAttempts,
-
-        fallback:
-            true,
-
-        ...(process.env.NODE_ENV !== 'production'
-            ? {
-                debug:
-                    errors
-            }
-            : {})
-    });
+        return res.status(200).json({
+            status: true,
+            creator: 'familybot-md',
+            category: data.category,
+            url: data.result.url,
+            gachaId: data.gachaId,
+            rarity: data.rarity.name,
+            rarityEmoji: data.rarity.emoji,
+            rarityChance: `${data.rarity.chance}%`,
+            artist: data.result.artist,
+            artist_url: data.result.artist_url,
+            source: data.result.source,
+            dimensions: data.result.dimensions,
+            provider: 'nekos.best',
+            attempts: data.attempts,
+            fallback: data.fallback,
+            message: `🎰 ¡Gacha! Obtuviste ${data.rarity.emoji} ${data.rarity.name}`
+        });
+    } catch (error) {
+        console.error('Error gacha:', error.message);
+        return res.status(502).json({
+            status: false,
+            creator: 'familybot-md',
+            message: 'No se pudo completar la tirada de Gacha en este momento'
+        });
+    }
 });
 
-// ======================================================
-// EXPORTAR
-// ======================================================
+router.meta = {
+    title: 'Anime Gacha',
+    description: 'Tirada aleatoria con rareza. Puede devolver JSON o la imagen directamente.',
+    icon: 'fas fa-dice',
+    fields: [
+        {
+            name: 'format',
+            label: 'Formato',
+            type: 'select',
+            default: 'json',
+            options: [
+                { value: 'json', label: 'JSON + URL' },
+                { value: 'image', label: 'Imagen directa (WhatsApp)' }
+            ]
+        }
+    ],
+    resultType: 'image',
+    resultField: 'url'
+};
 
 module.exports = router;
