@@ -21,26 +21,33 @@ function text(value, fallback, max) {
     return (valueText || fallback).slice(0, max);
 }
 
+function param(req, name, fallback = '') {
+    return req.body?.[name] ?? req.query?.[name] ?? fallback;
+}
+
 router.post('/', upload.single('avatar'), async (req, res) => {
     try {
-        const style = String(req.body.style || 'divine').toLowerCase();
+        const style = String(param(req, 'style', 'divine')).toLowerCase();
         if (!STYLES.has(style)) {
             return res.status(400).json({ status: false, creator: 'FamilyBot-MD', message: 'Estilo no válido.', styles: [...STYLES] });
         }
 
-        if (!req.file && !req.body.avatarUrl) {
+        const avatarUrl = String(param(req, 'avatarUrl', '')).trim();
+        if (!req.file && !avatarUrl) {
             return res.status(400).json({ status: false, creator: 'FamilyBot-MD', message: 'Envía el avatar como archivo "avatar" o proporciona "avatarUrl".' });
         }
 
         const image = await generateWelcomeCanvas({
             style,
             avatarBuffer: req.file?.buffer,
-            avatarUrl: req.body.avatarUrl,
-            username: text(req.body.username, 'Nuevo miembro', 34),
-            groupName: text(req.body.groupName, 'Nuestro grupo', 40),
-            members: text(req.body.members, '0', 12),
-            message: text(req.body.message, 'Bienvenido al grupo', 55),
-            date: text(req.body.date, new Date().toLocaleDateString('es-PE'), 24)
+            avatarUrl,
+            username: text(param(req, 'username'), 'Nuevo miembro', 34),
+            groupName: text(param(req, 'groupName'), 'Nuestro grupo', 40),
+            members: text(param(req, 'members'), '0', 12),
+            message: text(param(req, 'message'), 'Bienvenido al grupo', 55),
+            date: text(param(req, 'date'), new Date().toLocaleDateString('es-PE'), 24),
+            title: text(param(req, 'title'), style === 'divine' ? 'WELCOME TO THE KINGDOM' : 'WELCOME', 32),
+            footer: text(param(req, 'footer'), '✦ FamilyBot-MD ✦', 30)
         });
 
         if (String(req.query.format || '').toLowerCase() === 'image') {
@@ -62,7 +69,7 @@ router.post('/', upload.single('avatar'), async (req, res) => {
         });
     } catch (error) {
         console.error('[WELCOME CANVAS ERROR]', error);
-        const status = /avatar|imagen|image|HTTP|URL|límite|MB/i.test(error.message || '') ? 422 : 500;
+        const status = /avatar|imagen|image|HTTP|URL|límite|MB|dirección local|privada|tardó demasiado|vacío/i.test(error.message || '') ? 422 : 500;
         return res.status(status).json({ status: false, creator: 'FamilyBot-MD', message: status === 422 ? error.message : 'No se pudo generar el Welcome Canvas.' });
     }
 });
@@ -89,13 +96,15 @@ router.meta = {
         { name: 'members', label: 'Miembros', type: 'text', placeholder: '123' },
         { name: 'message', label: 'Mensaje', type: 'text', placeholder: 'Bienvenido al grupo' },
         { name: 'date', label: 'Fecha', type: 'text', placeholder: 'Opcional' },
+        { name: 'title', label: 'Título', type: 'text', placeholder: 'WELCOME' },
+        { name: 'footer', label: 'Pie', type: 'text', placeholder: '✦ FamilyBot-MD ✦' },
         { name: 'style', label: 'Estilo', type: 'select', options: [
             { value: 'divine', label: 'Divine' }, { value: 'royal', label: 'Royal' }, { value: 'neon', label: 'Neon' }, { value: 'galaxy', label: 'Galaxy' }, { value: 'dark', label: 'Dark' }
         ], default: 'divine' }
     ],
     resultType: 'image',
     resultField: 'result.url',
-    example: { method: 'POST', path: '/api/canvas/welcome?apiKey=TU_KEY&format=image', contentType: 'multipart/form-data', fields: { avatar: 'avatar.jpg', username: 'Juan', groupName: 'Mi Grupo', members: '25', message: '¡Bienvenido al grupo!', style: 'neon' } }
+    example: { method: 'POST', path: '/api/canvas/welcome?apiKey=TU_KEY&format=image', contentType: 'multipart/form-data', fields: { avatar: 'avatar.jpg', username: 'Juan', groupName: 'Mi Grupo', members: '25', message: '¡Bienvenido al grupo!', title: 'WELCOME', footer: '✦ FamilyBot-MD ✦', style: 'neon' } }
 };
 
 module.exports = router;
