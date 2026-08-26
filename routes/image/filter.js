@@ -6,6 +6,7 @@ const router = express.Router();
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_PIXELS = 25_000_000;
+const MAX_OUTPUT_SIZE = 7 * 1024 * 1024;
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -19,16 +20,8 @@ const upload = multer({
 });
 
 const FILTERS = new Set([
-    'grayscale',
-    'sepia',
-    'negative',
-    'blur',
-    'brightness',
-    'contrast',
-    'saturate',
-    'sharpen',
-    'pixelate',
-    'vintage'
+    'grayscale', 'sepia', 'negative', 'blur', 'brightness',
+    'contrast', 'saturate', 'sharpen', 'pixelate', 'vintage'
 ]);
 
 function number(value, fallback, min, max) {
@@ -38,38 +31,23 @@ function number(value, fallback, min, max) {
 }
 
 async function applyFilter(input, filter, intensity) {
-    let image = sharp(input, {
+    const image = sharp(input, {
         failOn: 'warning',
         limitInputPixels: MAX_PIXELS
     }).rotate();
 
     switch (filter) {
-        case 'grayscale':
-            return image.grayscale();
-
-        case 'sepia':
-            return image.grayscale().tint('#704214');
-
-        case 'negative':
-            return image.negate();
-
-        case 'blur':
-            return image.blur(number(intensity, 3, 0.3, 20));
-
-        case 'brightness':
-            return image.modulate({ brightness: number(intensity, 1.25, 0.25, 2) });
-
+        case 'grayscale': return image.grayscale();
+        case 'sepia': return image.grayscale().tint('#704214');
+        case 'negative': return image.negate();
+        case 'blur': return image.blur(number(intensity, 3, 0.3, 20));
+        case 'brightness': return image.modulate({ brightness: number(intensity, 1.25, 0.25, 2) });
         case 'contrast': {
             const contrast = number(intensity, 1.35, 0.5, 2);
             return image.linear(contrast, 128 * (1 - contrast));
         }
-
-        case 'saturate':
-            return image.modulate({ saturation: number(intensity, 1.5, 0, 3) });
-
-        case 'sharpen':
-            return image.sharpen({ sigma: number(intensity, 2, 0.3, 10) });
-
+        case 'saturate': return image.modulate({ saturation: number(intensity, 1.5, 0, 3) });
+        case 'sharpen': return image.sharpen({ sigma: number(intensity, 2, 0.3, 10) });
         case 'pixelate': {
             const metadata = await image.metadata();
             const width = metadata.width || 800;
@@ -78,15 +56,11 @@ async function applyFilter(input, filter, intensity) {
             return image.resize({ width: smallWidth, withoutEnlargement: true })
                 .resize({ width, kernel: sharp.kernel.nearest });
         }
-
         case 'vintage':
-            return image
-                .modulate({ saturation: 0.75, brightness: 1.05 })
+            return image.modulate({ saturation: 0.75, brightness: 1.05 })
                 .linear(1.08, -8)
                 .tint('#f0d2a0');
-
-        default:
-            throw new Error('Filtro no permitido.');
+        default: throw new Error('Filtro no permitido.');
     }
 }
 
@@ -100,7 +74,6 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     const filter = String(req.body.filter || 'grayscale').trim().toLowerCase();
-
     if (!FILTERS.has(filter)) {
         return res.status(400).json({
             status: false,
@@ -111,19 +84,41 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const intensity = req.body.intensity;
-        const output = await applyFilter(req.file.buffer, filter, intensity)
-            .jpeg({ quality: 90, mozjpeg: true })
+        const output = await applyFilter(req.file.buffer, filter, req.body.intensity)
+            .jpeg({ quality: 88, mozjpeg: true })
             .toBuffer();
 
-        res.status(200)
-            .type('jpg')
-            .set('Cache-Control', 'no-store')
-            .send(output);
+        if (output.length > MAX_OUTPUT_SIZE) {
+            return res.status(413).json({
+                status: false,
+                creator: 'FamilyBot-MD',
+                message: 'La imagen procesada es demasiado grande.'
+            });
+        }
+
+        // JSON por defecto para que el Dashboard pueda mostrar el resultado.
+        // ?format=image devuelve directamente el JPEG para clientes que lo necesiten.
+        if (String(req.query.format).toLowerCase() === 'image') {
+            return res.status(200)
+                .type('jpg')
+                .set('Cache-Control', 'no-store')
+                .send(output);
+        }
+
+        return res.status(200).json({
+            status: true,
+            creator: 'FamilyBot-MD',
+            filter,
+            mimetype: 'image/jpeg',
+            size: output.length,
+            result: {
+                url: `data:image/jpeg;base64,${output.toString('base64')}`
+            }
+        });
     } catch (error) {
         console.error('[IMAGE FILTER ERROR]', error);
         const isImageError = /Input|image|format|pixel|corrupt|unsupported/i.test(error.message || '');
-        res.status(isImageError ? 422 : 500).json({
+        return res.status(isImageError ? 422 : 500).json({
             status: false,
             creator: 'FamilyBot-MD',
             message: isImageError
@@ -174,7 +169,7 @@ router.meta = {
         { name: 'intensity', label: 'Intensidad', type: 'text', placeholder: 'Ej: 3 para blur, 1.5 para brillo/saturación' }
     ],
     resultType: 'image',
-    resultField: null
+    resultField: 'result.url'
 };
 
 module.exports = router;
