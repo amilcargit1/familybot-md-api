@@ -1,20 +1,32 @@
 const http = require('http');
 const https = require('https');
 
-/**
- * Builds an admin-safe snapshot of every endpoint discovered by loadRoutes.
- * "support" describes what the application exposes; "status" is runtime state.
- * No API keys, request bodies or credentials are included in the snapshot.
- */
+const disabledEndpoints = new Set();
+
+function isDisabled(path) {
+    return disabledEndpoints.has(String(path));
+}
+
+function setEndpointEnabled(path, enabled) {
+    const key = String(path);
+    if (enabled) disabledEndpoints.delete(key);
+    else disabledEndpoints.add(key);
+    return !disabledEndpoints.has(key);
+}
+
 function buildEndpointCatalog(app) {
-    return (app.locals.apiEndpoints || []).map((endpoint) => ({
-        ...endpoint,
-        support: 'supported',
-        status: 'available',
-        lastCheckedAt: null,
-        responseTimeMs: null,
-        error: null
-    }));
+    return (app.locals.apiEndpoints || []).map((endpoint) => {
+        const enabled = !isDisabled(endpoint.path);
+        return {
+            ...endpoint,
+            support: 'supported',
+            monitoringEnabled: enabled,
+            status: enabled ? 'available' : 'disabled',
+            lastCheckedAt: null,
+            responseTimeMs: null,
+            error: enabled ? null : 'Monitorización desactivada por un administrador.'
+        };
+    });
 }
 
 function getRequestModule(baseUrl) {
@@ -30,16 +42,21 @@ function checkUrl(url, timeoutMs = 8000) {
             settled = true;
             resolve({ ...result, responseTimeMs: Date.now() - started });
         };
-
         let parsed;
         try {
             parsed = new URL(url);
         } catch {
             return finish({ status: 'error', error: 'URL de comprobación inválida.' });
         }
-
         const client = getRequestModule(parsed.protocol);
-        const req = client.request(parsed, { method: 'GET', timeout: timeoutMs, headers: { 'User-Agent': 'FamilyBot-MD-EndpointMonitor/1.0', Accept: 'application/json,text/plain,*/*' } }, (res) => {
+        const req = client.request(parsed, {
+            method: 'GET',
+            timeout: timeoutMs,
+            headers: {
+                'User-Agent': 'FamilyBot-MD-EndpointMonitor/1.0',
+                Accept: 'application/json,text/plain,*/*'
+            }
+        }, (res) => {
             res.resume();
             res.on('end', () => {
                 const code = res.statusCode || 0;
@@ -55,23 +72,43 @@ function checkUrl(url, timeoutMs = 8000) {
 }
 
 async function checkEndpoint(baseUrl, endpoint) {
-    // GET-only, parameter-free smoke checks are safe only for endpoints whose
-    // metadata says GET and that do not require a request body.
+    if (isDisabled(endpoint.path)) {
+        return {
+            status: 'disabled',
+            monitoringEnabled: false,
+            checked: false,
+            lastCheckedAt: new Date().toISOString(),
+            responseTimeMs: null,
+            error: 'Monitorización desactivada por un administrador.'
+        };
+    }
+
     if (String(endpoint.method || 'GET').toUpperCase() !== 'GET') {
-        return { status: 'supported', checked: false, lastCheckedAt: new Date().toISOString(), responseTimeMs: null, error: 'Requiere datos de entrada; no se ejecutó automáticamente.' };
+        return {
+            status: 'supported',
+            monitoringEnabled: true,
+            checked: false,
+            lastCheckedAt: new Date().toISOString(),
+            responseTimeMs: null,
+            error: 'Requiere datos de entrada; no se ejecutó automáticamente.'
+        };
     }
 
     const result = await checkUrl(new URL(endpoint.path, baseUrl).toString());
-    return { ...result, checked: true, lastCheckedAt: new Date().toISOString() };
+    return { ...result, monitoringEnabled: true, checked: true, lastCheckedAt: new Date().toISOString() };
 }
 
 async function checkAllGetEndpoints(app, baseUrl) {
     const endpoints = buildEndpointCatalog(app);
-    const results = await Promise.all(endpoints.map(async (endpoint) => ({
+    return Promise.all(endpoints.map(async (endpoint) => ({
         ...endpoint,
         ...(await checkEndpoint(baseUrl, endpoint))
     })));
-    return results;
 }
 
-module.exports = { buildEndpointCatalog, checkAllGetEndpoints };
+module.exports = {
+    buildEndpointCatalog,
+    checkAllGetEndpoints,
+    isDisabled,
+    setEndpointEnabled
+};
