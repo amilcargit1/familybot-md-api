@@ -1,4 +1,6 @@
 const express = require('express')
+const ffmpegPath = require('ffmpeg-static')
+const { spawn } = require('node:child_process')
 const router = express.Router()
 
 const NEKOSBEST_API = 'https://nekos.best/api/v2'
@@ -107,6 +109,46 @@ async function getFinalImage(type) {
     throw new Error(`Todos los proveedores fallaron para ${type}`)
 }
 
+function convertirAMp4(buffer, contentType) {
+    return new Promise((resolve, reject) => {
+        if (!ffmpegPath) return reject(new Error('FFmpeg no está disponible en la API'))
+
+        const ffmpeg = spawn(ffmpegPath, [
+            '-hide_banner', '-loglevel', 'error',
+            '-f', contentType === 'image/gif' ? 'gif' : 'image2pipe',
+            '-i', 'pipe:0',
+            '-an',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', 'frag_keyframe+empty_moov',
+            '-f', 'mp4',
+            'pipe:1'
+        ])
+
+        const chunks = []
+        const errors = []
+        ffmpeg.stdout.on('data', chunk => chunks.push(chunk))
+        ffmpeg.stderr.on('data', chunk => errors.push(chunk))
+        ffmpeg.on('error', reject)
+        ffmpeg.on('close', code => {
+            if (code !== 0) return reject(new Error(`FFmpeg terminó con código ${code}: ${Buffer.concat(errors).toString().slice(0, 500)}`))
+            const output = Buffer.concat(chunks)
+            if (!output.length) return reject(new Error('FFmpeg no generó un MP4'))
+            resolve(output)
+        })
+
+        ffmpeg.stdin.on('error', reject)
+        ffmpeg.stdin.end(buffer)
+    })
+}
+
+async function getFinalVideo(type) {
+    const result = await getFinalImage(type)
+    const video = await convertirAMp4(result.image.buffer, result.image.contentType)
+    return { video, provider: result.provider, fallback: result.fallback }
+}
+
 router.get('/', async (req, res) => {
     const type = String(req.query.type || '').trim().toLowerCase()
     if (!type) return res.status(400).json({ status:false, creator:'FamilyBot-MD', message:'Debes especificar una reacción', available:[...ALLOWED] })
@@ -122,15 +164,25 @@ router.get('/', async (req, res) => {
             res.setHeader('X-FamilyBot-Provider', result.provider)
             return res.status(200).send(result.image.buffer)
         }
-        if (format !== 'json') return res.status(400).json({ status:false, message:'format debe ser json o image' })
+        if (format === 'video') {
+            const video = await convertirAMp4(result.image.buffer, result.image.contentType)
+            res.setHeader('Content-Type', 'video/mp4')
+            res.setHeader('Content-Length', video.length)
+            res.setHeader('Cache-Control', 'no-store')
+            res.setHeader('X-FamilyBot-Provider', result.provider)
+            res.setHeader('X-FamilyBot-Fallback', String(result.fallback))
+            return res.status(200).send(video)
+        }
+        if (format !== 'json') return res.status(400).json({ status:false, message:'format debe ser json, image o video' })
 
         const apiKey = typeof req.query.apiKey === 'string' ? req.query.apiKey : ''
         const host = `${req.protocol}://${req.get('host')}`
         const imageUrl = `${host}/api/anime/reaction/image?apiKey=${encodeURIComponent(apiKey)}&type=${encodeURIComponent(type)}&v=${randomId()}`
-        return res.json({ status:true, creator:'FamilyBot-MD', type, url:imageUrl, proxy:true, cache:false, provider:result.provider })
+        const videoUrl = `${host}/api/anime/reaction/video?apiKey=${encodeURIComponent(apiKey)}&type=${encodeURIComponent(type)}&v=${randomId()}`
+        return res.json({ status:true, creator:'FamilyBot-MD', type, url:imageUrl, imageUrl, videoUrl, proxy:true, cache:false, provider:result.provider })
     } catch (error) {
         console.error(`[REACTION] ${type}: ${error.message}`)
-        return res.status(502).json({ status:false, creator:'FamilyBot-MD', type, message:'No se pudo obtener ninguna imagen de reacción' })
+        return res.status(502).json({ status:false, creator:'FamilyBot-MD', type, message:'No se pudo obtener ninguna reacción multimedia' })
     }
 })
 
@@ -154,17 +206,37 @@ router.get('/image', async (req, res) => {
     }
 })
 
+router.get('/video', async (req, res) => {
+    const type = String(req.query.type || '').trim().toLowerCase()
+    if (!type) return res.status(400).json({ status:false, message:'Falta el tipo de reacción' })
+    if (!ALLOWED.has(type)) return res.status(400).json({ status:false, message:'Tipo de reacción inválido' })
+    try {
+        const result = await getFinalVideo(type)
+        res.setHeader('Content-Type', 'video/mp4')
+        res.setHeader('Content-Length', result.video.length)
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+        res.setHeader('Pragma', 'no-cache')
+        res.setHeader('Expires', '0')
+        res.setHeader('X-FamilyBot-Provider', result.provider)
+        res.setHeader('X-FamilyBot-Fallback', String(result.fallback))
+        return res.status(200).send(result.video)
+    } catch (error) {
+        console.error(`[REACTION VIDEO] ${type}: ${error.message}`)
+        return res.status(502).json({ status:false, creator:'FamilyBot-MD', type, message:'No se pudo generar el video de la reacción' })
+    }
+})
+
 router.meta = {
     title:'Reaction',
-    description:'Genera una reacción anime SFW y puede devolver JSON con URL o la imagen directamente para WhatsApp.',
+    description:'Genera una reacción anime SFW como imagen o video MP4 compatible con WhatsApp. La conversión se realiza en la API.',
     icon:'fas fa-plug',
     fields:[
         { name:'type', label:'Reacción', type:'select', default:'happy', options:[...ALLOWED].map(value => ({ value, label:value })) },
-        { name:'format', label:'Formato', type:'select', default:'json', options:[{value:'json',label:'JSON + URL'},{value:'image',label:'Imagen directa (WhatsApp)'}] }
+        { name:'format', label:'Formato', type:'select', default:'json', options:[{value:'json',label:'JSON + URLs'},{value:'image',label:'Imagen directa'},{value:'video',label:'Video MP4 directo (WhatsApp)'}] }
     ],
     resultType:'image',
     resultField:'url',
-    example:{ status:true, creator:'FamilyBot-MD', type:'happy', url:'https://tu-api.com/api/anime/reaction/image?type=happy', proxy:true }
+    example:{ status:true, creator:'FamilyBot-MD', type:'happy', url:'https://tu-api.com/api/anime/reaction/image?type=happy', videoUrl:'https://tu-api.com/api/anime/reaction/video?type=happy', proxy:true }
 }
 
 module.exports = router
