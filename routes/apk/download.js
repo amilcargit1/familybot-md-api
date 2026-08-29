@@ -3,8 +3,6 @@ const dns = require('node:dns').promises
 const net = require('node:net')
 
 const router = express.Router()
-
-// Límite predeterminado: 200 MiB. Se puede cambiar en Render con APK_MAX_SIZE.
 const MAX_SIZE = Number(process.env.APK_MAX_SIZE || 200 * 1024 * 1024)
 const TIMEOUT_MS = Number(process.env.APK_DOWNLOAD_TIMEOUT || 30000)
 const USER_AGENT = 'FamilyBot-MD-API/1.0'
@@ -53,7 +51,7 @@ async function descargar(url) {
     if (!buffer.length) throw new Error('El archivo está vacío')
     if (buffer.length > MAX_SIZE) throw new Error(`El APK supera el límite de ${MAX_SIZE} bytes`)
     if (buffer.subarray(0, 2).toString('ascii') !== 'PK') throw new Error('El archivo no tiene una firma APK/ZIP válida')
-    return { buffer, contentType: response.headers.get('content-type') || 'application/vnd.android.package-archive' }
+    return buffer
   } finally {
     clearTimeout(timer)
   }
@@ -64,7 +62,7 @@ router.get('/download', async (req, res) => {
   if (!rawUrl) return res.status(400).json({ ok: false, error: 'Falta el parámetro url' })
   try {
     const url = await validarDestino(rawUrl)
-    const { buffer } = await descargar(url)
+    const buffer = await descargar(url)
     let nombre = decodeURIComponent(url.pathname.split('/').pop() || 'aplicacion.apk').replace(/[^a-zA-Z0-9._-]/g, '_')
     if (!nombre.toLowerCase().endsWith('.apk')) nombre += '.apk'
     res.setHeader('Content-Type', 'application/vnd.android.package-archive')
